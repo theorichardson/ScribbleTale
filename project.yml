@@ -1,0 +1,49 @@
+name: ScribbleTale
+options:
+  bundleIdPrefix: com.scribbletale
+  deploymentTarget:
+    iOS: "18.4"
+  xcodeVersion: "16.2"
+  developmentLanguage: en
+
+packages:
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    from: "0.2.0"
+
+targets:
+  ScribbleTale:
+    type: application
+    platform: iOS
+    sources:
+      - path: ScribbleTale
+        excludes:
+          - "Preview Content"
+          - "Resources/Assets.xcassets"
+    resources:
+      - path: ScribbleTale/Resources/Assets.xcassets
+      - path: ScribbleTale/Preview Content
+        buildPhase: none
+    settings:
+      base:
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        SWIFT_VERSION: "6.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.scribbletale.app
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        DEVELOPMENT_ASSET_PATHS: "\"ScribbleTale/Preview Content\""
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_EMIT_LOC_STRINGS: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: mlx-swift-lm
+        product: MLXLLM
+    entitlements:
+      path: ScribbleTale/ScribbleTale.entitlements
+      properties: {}
