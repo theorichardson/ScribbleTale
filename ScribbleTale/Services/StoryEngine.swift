@@ -5,7 +5,7 @@ import MLXLMCommon
 @Observable
 @MainActor
 final class StoryEngine {
-    private var llm: LLMModel?
+    private var modelContainer: ModelContainer?
     private(set) var isLoaded = false
     private(set) var isGenerating = false
     private(set) var loadingProgress: Double = 0
@@ -15,8 +15,10 @@ final class StoryEngine {
     func loadModel() async {
         guard !isLoaded else { return }
         do {
-            let modelConfig = ModelConfiguration(id: Self.modelID)
-            llm = try await LLMModelFactory.shared.create(configuration: modelConfig) { progress in
+            let config = ModelConfiguration(id: Self.modelID)
+            modelContainer = try await LLMModelFactory.shared.loadContainer(
+                configuration: config
+            ) { progress in
                 Task { @MainActor in
                     self.loadingProgress = progress.fractionCompleted
                 }
@@ -27,56 +29,76 @@ final class StoryEngine {
         }
     }
 
-    func generateIntroduction(for storyType: StoryType) -> AsyncStream<String> {
+    // MARK: - Generation Methods
+
+    func generateIntroduction(for storyType: StoryType) -> AsyncThrowingStream<String, Error> {
         let prompt = """
-        You are a children's storyteller. Write a short, exciting, cinematic introduction \
-        (3-4 sentences) for a \(storyType.rawValue) story for kids aged 6-10. \
-        Make it vivid and full of wonder. Use simple language. \
-        Set the scene and make the reader feel like they're about to go on an amazing adventure. \
-        Do not include any instructions or meta-text, just the story introduction.
+        Write a short, exciting, cinematic introduction (3-4 sentences) for a \
+        \(storyType.rawValue) story for kids aged 6-10. Make it vivid and full of wonder. \
+        Use simple language. Set the scene and make the reader feel like they're about to \
+        go on an amazing adventure. Only output the story introduction.
         """
-        return streamGeneration(systemPrompt: storySystemPrompt(for: storyType), userPrompt: prompt)
+        return streamText(
+            systemPrompt: storySystemPrompt(for: storyType),
+            userPrompt: prompt
+        )
     }
 
-    func generateDrawingPrompt(for chapter: Chapter, storyType: StoryType, previousChapters: [Chapter]) -> AsyncStream<String> {
-        let context = previousChapters.isEmpty ? "" : """
-        \nSo far in the story: \(previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }.joined(separator: " "))
-        """
+    func generateDrawingPrompt(
+        for chapter: Chapter,
+        storyType: StoryType,
+        previousChapters: [Chapter]
+    ) -> AsyncThrowingStream<String, Error> {
+        let context = previousChapters
+            .compactMap { $0.narration.isEmpty ? nil : $0.narration }
+            .joined(separator: " ")
 
         let prompt = """
         Generate a short, fun drawing prompt for a child (5-10 words max). \
-        This is chapter \(chapter.index + 1) of 5, the "\(chapter.beat.rawValue)" chapter \
-        of a \(storyType.rawValue) story.\(context)
+        This is chapter \(chapter.index + 1) of 5, the "\(chapter.beat.rawValue)" beat \
+        of a \(storyType.rawValue) story.\
+        \(context.isEmpty ? "" : " Story so far: \(context)") \
         The prompt should start with "Draw" and tell the child what to draw. \
         Only output the prompt, nothing else.
         """
-        return streamGeneration(systemPrompt: storySystemPrompt(for: storyType), userPrompt: prompt)
+        return streamText(
+            systemPrompt: storySystemPrompt(for: storyType),
+            userPrompt: prompt
+        )
     }
 
-    func generateImagePrompt(for chapter: Chapter, storyType: StoryType, drawingPrompt: String) -> AsyncStream<String> {
+    func generateImagePrompt(
+        for chapter: Chapter,
+        storyType: StoryType,
+        drawingPrompt: String
+    ) -> AsyncThrowingStream<String, Error> {
         let prompt = """
-        Based on a child's drawing for the prompt "\(drawingPrompt)" in a \(storyType.rawValue) story, \
-        write a detailed image generation prompt (1-2 sentences) that describes the scene vividly. \
-        Include style cues: colorful, whimsical, children's book illustration style. \
-        Only output the image prompt, nothing else.
+        Based on a child's drawing for the prompt "\(drawingPrompt)" in a \
+        \(storyType.rawValue) story, write a detailed image generation prompt \
+        (1-2 sentences) describing the scene vividly. Include style cues: colorful, \
+        whimsical, children's book illustration style. Only output the image prompt.
         """
-        return streamGeneration(systemPrompt: storySystemPrompt(for: storyType), userPrompt: prompt)
+        return streamText(
+            systemPrompt: storySystemPrompt(for: storyType),
+            userPrompt: prompt
+        )
     }
 
-    func generateNarration(for chapter: Chapter, storyType: StoryType, previousChapters: [Chapter]) -> AsyncStream<String> {
-        let context = previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }.joined(separator: " ")
-        let beatGuide: String
-        switch chapter.beat {
-        case .character:
-            beatGuide = "Introduce the main character with personality and charm."
-        case .setting:
-            beatGuide = "Describe the world they're entering with vivid detail."
-        case .challenge:
-            beatGuide = "Present an exciting challenge or obstacle."
-        case .climax:
-            beatGuide = "Build to the most thrilling moment of the story."
-        case .resolution:
-            beatGuide = "Wrap up the story with a satisfying, happy ending."
+    func generateNarration(
+        for chapter: Chapter,
+        storyType: StoryType,
+        previousChapters: [Chapter]
+    ) -> AsyncThrowingStream<String, Error> {
+        let context = previousChapters
+            .compactMap { $0.narration.isEmpty ? nil : $0.narration }
+            .joined(separator: " ")
+
+        let beatGuide: String = switch chapter.beat {
+        case .character: "Introduce the main character with personality and charm."
+        case .setting: "Describe the world they're entering with vivid detail."
+        case .challenge: "Present an exciting challenge or obstacle."
+        case .climax: "Build to the most thrilling moment of the story."
+        case .resolution: "Wrap up the story with a satisfying, happy ending."
         }
 
         let prompt = """
@@ -85,45 +107,53 @@ final class StoryEngine {
         \(beatGuide) \
         \(context.isEmpty ? "" : "Story so far: \(context) ") \
         The child drew something for the prompt: "\(chapter.drawingPrompt)". \
-        Continue the story naturally. Only output the story text, nothing else.
+        Continue the story naturally. Only output the story text.
         """
-        return streamGeneration(systemPrompt: storySystemPrompt(for: storyType), userPrompt: prompt)
+        return streamText(
+            systemPrompt: storySystemPrompt(for: storyType),
+            userPrompt: prompt
+        )
     }
+
+    // MARK: - Private
 
     private func storySystemPrompt(for storyType: StoryType) -> String {
         """
         You are a creative children's storyteller specializing in \(storyType.rawValue) stories. \
         Your audience is kids aged 6-10. Use simple, vivid language. Be fun, warm, and encouraging. \
-        Keep responses concise. Never include meta-text, instructions, or markdown.
+        Keep responses concise. Never include meta-text, instructions, or markdown formatting.
         """
     }
 
-    private func streamGeneration(systemPrompt: String, userPrompt: String) -> AsyncStream<String> {
-        AsyncStream { continuation in
-            Task {
-                guard let llm else {
-                    continuation.finish()
-                    return
-                }
-                isGenerating = true
-                defer { isGenerating = false }
+    private func streamText(
+        systemPrompt: String,
+        userPrompt: String
+    ) -> AsyncThrowingStream<String, Error> {
+        guard let modelContainer else {
+            return AsyncThrowingStream { $0.finish() }
+        }
+
+        let container = modelContainer
+        let params = GenerateParameters(maxTokens: 256, temperature: 0.7, topP: 0.9)
+
+        return AsyncThrowingStream { continuation in
+            Task { @MainActor in
+                self.isGenerating = true
+                defer { self.isGenerating = false }
+
+                let session = ChatSession(
+                    container,
+                    instructions: systemPrompt,
+                    generateParameters: params
+                )
 
                 do {
-                    let messages: [[String: String]] = [
-                        ["role": "system", "content": systemPrompt],
-                        ["role": "user", "content": userPrompt]
-                    ]
-                    let result = try await llm.generate(
-                        messages: messages,
-                        maxTokens: 256
-                    ) { token in
-                        continuation.yield(token)
+                    for try await chunk in session.streamResponse(to: userPrompt) {
+                        continuation.yield(chunk)
                     }
-                    _ = result
                     continuation.finish()
                 } catch {
-                    print("Generation error: \(error)")
-                    continuation.finish()
+                    continuation.finish(throwing: error)
                 }
             }
         }

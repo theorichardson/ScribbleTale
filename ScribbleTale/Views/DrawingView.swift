@@ -17,6 +17,7 @@ struct DrawingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            chapterProgressBar
             promptBanner
             canvas
             toolbar
@@ -30,6 +31,25 @@ struct DrawingView: View {
                     .font(.system(.headline, design: .rounded))
             }
         }
+    }
+
+    private var chapterProgressBar: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<Story.chapterCount, id: \.self) { i in
+                Capsule()
+                    .fill(
+                        i < chapterIndex
+                            ? (coordinator.story?.storyType.color ?? .purple)
+                            : i == chapterIndex
+                                ? (coordinator.story?.storyType.color ?? .purple).opacity(0.5)
+                                : Color(.systemGray4)
+                    )
+                    .frame(height: 4)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     private var promptBanner: some View {

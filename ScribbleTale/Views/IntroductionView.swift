@@ -5,6 +5,7 @@ struct IntroductionView: View {
     @State private var introText = ""
     @State private var isReady = false
     @State private var showButton = false
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -14,6 +15,13 @@ struct IntroductionView: View {
                 Spacer()
 
                 storyContent
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(.callout, design: .rounded))
+                        .foregroundStyle(.red)
+                        .padding()
+                }
 
                 Spacer()
 
@@ -82,23 +90,28 @@ struct IntroductionView: View {
     private func generateIntro() async {
         guard let story = coordinator.story else { return }
 
-        var prompt = ""
-        for await token in coordinator.storyEngine.generateIntroduction(for: story.storyType) {
-            prompt += token
-            introText = prompt
-        }
-        story.introText = prompt
-
-        for chapter in story.chapters {
-            var drawPrompt = ""
-            for await token in coordinator.storyEngine.generateDrawingPrompt(
-                for: chapter,
-                storyType: story.storyType,
-                previousChapters: Array(story.chapters.prefix(chapter.index))
-            ) {
-                drawPrompt += token
+        do {
+            var prompt = ""
+            for try await token in coordinator.storyEngine.generateIntroduction(for: story.storyType) {
+                prompt += token
+                introText = prompt
             }
-            chapter.drawingPrompt = drawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            story.introText = prompt
+
+            for chapter in story.chapters {
+                var drawPrompt = ""
+                for try await token in coordinator.storyEngine.generateDrawingPrompt(
+                    for: chapter,
+                    storyType: story.storyType,
+                    previousChapters: Array(story.chapters.prefix(chapter.index))
+                ) {
+                    drawPrompt += token
+                }
+                chapter.drawingPrompt = drawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch {
+            errorMessage = "Oops! The story brain had a hiccup. Try again!"
+            print("Generation error: \(error)")
         }
 
         withAnimation(.easeOut(duration: 0.5)) {

@@ -10,6 +10,7 @@ struct ImageRevealView: View {
     @State private var isReady = false
     @State private var imageScale: CGFloat = 0.8
     @State private var imageOpacity: Double = 0
+    @State private var imageError: String?
 
     private var chapter: Chapter? {
         coordinator.story?.chapters[safe: chapterIndex]
@@ -83,7 +84,15 @@ struct ImageRevealView: View {
                     .scaleEffect(imageScale)
                     .opacity(imageOpacity)
             } else {
-                userDrawingFallback
+                VStack(spacing: 12) {
+                    userDrawingFallback
+                    if let imageError {
+                        Text(imageError)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
         }
     }
@@ -140,15 +149,19 @@ struct ImageRevealView: View {
         guard let story = coordinator.story,
               let chapter else { return }
 
-        var imgPrompt = ""
-        for await token in coordinator.storyEngine.generateImagePrompt(
-            for: chapter,
-            storyType: story.storyType,
-            drawingPrompt: chapter.drawingPrompt
-        ) {
-            imgPrompt += token
+        do {
+            var imgPrompt = ""
+            for try await token in coordinator.storyEngine.generateImagePrompt(
+                for: chapter,
+                storyType: story.storyType,
+                drawingPrompt: chapter.drawingPrompt
+            ) {
+                imgPrompt += token
+            }
+            chapter.imageGenerationPrompt = imgPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            print("Image prompt generation failed: \(error)")
         }
-        chapter.imageGenerationPrompt = imgPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
 
         do {
             let image = try await coordinator.imageService.generateImage(
@@ -163,22 +176,27 @@ struct ImageRevealView: View {
                 imageOpacity = 1.0
             }
         } catch {
+            imageError = "Your drawing is so unique, the magic paintbrush needs a break! Here's your original art instead."
             print("Image generation failed: \(error)")
         }
 
         isGeneratingImage = false
 
-        let previousChapters = Array(story.chapters.prefix(chapterIndex))
-        var narration = ""
-        for await token in coordinator.storyEngine.generateNarration(
-            for: chapter,
-            storyType: story.storyType,
-            previousChapters: previousChapters
-        ) {
-            narration += token
-            narrationText = narration
+        do {
+            let previousChapters = Array(story.chapters.prefix(chapterIndex))
+            var narration = ""
+            for try await token in coordinator.storyEngine.generateNarration(
+                for: chapter,
+                storyType: story.storyType,
+                previousChapters: previousChapters
+            ) {
+                narration += token
+                narrationText = narration
+            }
+            chapter.narration = narration.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            print("Narration generation failed: \(error)")
         }
-        chapter.narration = narration.trimmingCharacters(in: .whitespacesAndNewlines)
 
         withAnimation(.easeOut(duration: 0.5)) {
             isReady = true

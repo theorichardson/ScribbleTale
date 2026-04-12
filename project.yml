@@ -9,7 +9,7 @@ options:
 packages:
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
-    from: "0.2.0"
+    from: "2.31.3"
 
 targets:
   ScribbleTale:
@@ -44,6 +44,8 @@ targets:
     dependencies:
       - package: mlx-swift-lm
         product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
     entitlements:
       path: ScribbleTale/ScribbleTale.entitlements
       properties: {}

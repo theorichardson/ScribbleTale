@@ -22,6 +22,7 @@
 		D69B52C0F83FB3FF7EF11505 /* TypewriterText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 305823839BD91DA5077082CD /* TypewriterText.swift */; };
 		E79BF6288F3EF7554CB4CCEF /* ScribbleTaleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD115533B35243726BFAD78 /* ScribbleTaleApp.swift */; };
 		EA8053644EDCA0237A2E54FA /* IntroductionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F60A02A38774EF1722CAA6 /* IntroductionView.swift */; };
+		EEF8162034C23CFF225E46CA /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 562DB8F13D01DAD1BFA9A74C /* MLXLMCommon */; };
 		F3B7AD1FD76A0C8E4156C98E /* StoryTypeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790D91EB811D55C1314751E1 /* StoryTypeCard.swift */; };
 		FE5D6DEE33D799F26266B7B0 /* StoryCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B9D2AAF93C21CD10237798 /* StoryCompleteView.swift */; };
 /* End PBXBuildFile section */
@@ -53,6 +54,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				459C077B0317AD3E66F5B324 /* MLXLLM in Frameworks */,
+				EEF8162034C23CFF225E46CA /* MLXLMCommon in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,7 +141,7 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
-		"TEMP_D888ACED-21D8-4B3F-907D-83624FDA559C" /* Resources */ = {
+		"TEMP_46CDA328-475F-4A45-B527-9396069BBBFC" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -163,6 +165,7 @@
 			name = ScribbleTale;
 			packageProductDependencies = (
 				9CB6DA3920362ACD10599CB4 /* MLXLLM */,
+				562DB8F13D01DAD1BFA9A74C /* MLXLMCommon */,
 			);
 			productName = ScribbleTale;
 			productReference = 92B57EDA0559ECC49F20AE51 /* ScribbleTale.app */;
@@ -434,12 +437,17 @@
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.2.0;
+				minimumVersion = 2.31.3;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		562DB8F13D01DAD1BFA9A74C /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 60D1A529753C24BE1E43F3C0 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
 		9CB6DA3920362ACD10599CB4 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 60D1A529753C24BE1E43F3C0 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;

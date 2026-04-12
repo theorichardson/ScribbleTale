@@ -8,29 +8,34 @@ import CoreGraphics
 final class ImageGenerationService {
     private(set) var isGenerating = false
     private(set) var isAvailable = false
+    private var creator: ImageCreator?
+    private var style: ImagePlaygroundStyle?
 
     func checkAvailability() async {
-        isAvailable = ImageCreator.isAvailable
+        do {
+            let c = try await ImageCreator()
+            creator = c
+            style = c.availableStyles.first
+            isAvailable = style != nil
+        } catch {
+            isAvailable = false
+        }
     }
 
     func generateImage(from drawing: PKDrawing, prompt: String) async throws -> CGImage? {
-        guard isAvailable else {
+        guard let creator, let style else {
             throw ImageGenerationError.notAvailable
         }
 
         isGenerating = true
         defer { isGenerating = false }
 
-        let creator = ImageCreator()
         let concepts: [ImagePlaygroundConcept] = [
             .drawing(drawing),
             .text(prompt)
         ]
 
-        let styles = ImageCreator.availableStyles
-        let style = styles.first ?? .animation
-
-        for try await result in creator.images(for: concepts, style: style) {
+        for try await result in creator.images(for: concepts, style: style, limit: 1) {
             return result.cgImage
         }
 

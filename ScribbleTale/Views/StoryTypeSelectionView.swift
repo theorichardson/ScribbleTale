@@ -69,13 +69,17 @@ struct StoryTypeSelectionView: View {
     }
 
     private var loadingIndicator: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             ProgressView(value: coordinator.storyEngine.loadingProgress)
                 .tint(.purple)
             Text("Loading story brain...")
-                .font(.system(.caption, design: .rounded))
+                .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.secondary)
+            Text("First time may take a moment to download the model")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 40)
+        .padding(.vertical, 8)
     }
 }
