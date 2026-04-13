@@ -88,7 +88,16 @@ struct StoryCompleteView: View {
                 Spacer()
             }
 
-            if let cgImage = chapter.generatedImage {
+            if chapter.playgroundGeneratedImage != nil || chapter.coreMLGeneratedImage != nil {
+                VStack(spacing: 12) {
+                    if let playgroundImage = chapter.playgroundGeneratedImage {
+                        comparisonImage(title: "Image Playground", image: playgroundImage)
+                    }
+                    if let coreMLImage = chapter.coreMLGeneratedImage {
+                        comparisonImage(title: "Core ML Stable Diffusion", image: coreMLImage)
+                    }
+                }
+            } else if let cgImage = chapter.generatedImage {
                 Image(decorative: cgImage, scale: 1.0)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -114,6 +123,19 @@ struct StoryCompleteView: View {
         }
         .padding(16)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    private func comparisonImage(title: String, image: CGImage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Image(decorative: image, scale: 1.0)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+        }
     }
 
     private var homeButton: some View {
