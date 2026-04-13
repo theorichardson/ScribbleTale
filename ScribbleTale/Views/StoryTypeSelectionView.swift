@@ -111,7 +111,7 @@ struct StoryTypeSelectionView: View {
     private var availabilitySummary: some View {
         VStack(spacing: 6) {
             availabilityLine(
-                title: "Story Engine (Gemma 3 4B)",
+                title: "Story Engine (Gemma 3 1B)",
                 available: coordinator.storyEngine.isLoaded
             )
             availabilityLine(

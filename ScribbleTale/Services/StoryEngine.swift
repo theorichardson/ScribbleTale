@@ -14,7 +14,7 @@ final class StoryEngine {
     private(set) var loadingProgress: Double = 0
     private(set) var loadingStatus: String = ""
 
-    private static let modelID = "mlx-community/gemma-3-4b-it-4bit"
+    private static let modelID = "mlx-community/gemma-3-1b-it-4bit"
 
     func loadModel() async {
         guard !isLoaded else {
