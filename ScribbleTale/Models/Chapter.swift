@@ -33,8 +33,8 @@ enum DrawingSubject: String, Codable, Sendable {
 
     var icon: String {
         switch self {
-        case .mainCharacter: "figure.stand"
-        case .ally: "person.2.fill"
+        case .mainCharacter: "hare.fill"
+        case .ally: "bird.fill"
         case .villain: "theatermasks.fill"
         case .pet: "pawprint.fill"
         case .object: "sparkle"
@@ -43,20 +43,22 @@ enum DrawingSubject: String, Codable, Sendable {
     }
 
     /// Context given to the LLM when generating the child's drawing prompt.
+    /// All characters MUST be animals or creatures — Image Playground cannot
+    /// generate people without a source photo.
     var drawingPromptHint: String {
         switch self {
         case .mainCharacter:
-            "Ask the child to draw the main character of the story — a person or creature who will be the hero."
+            "Ask the child to draw an animal or creature who is the hero of the story."
         case .ally:
-            "Ask the child to draw a friendly character who will help the hero on their journey."
+            "Ask the child to draw a friendly animal or creature who helps the hero."
         case .villain:
-            "Ask the child to draw a troublemaker, rival, or obstacle character who causes problems in the story."
+            "Ask the child to draw a sneaky or scary animal, monster, or creature who causes trouble."
         case .pet:
-            "Ask the child to draw an animal companion or pet that joins the adventure."
+            "Ask the child to draw a small animal companion or pet that joins the adventure."
         case .object:
-            "Ask the child to draw a special object, tool, or magical item that plays an important role in the story."
+            "Ask the child to draw a special object, tool, or magical item."
         case .scene:
-            "Ask the child to draw a place or setting where part of the story happens."
+            "Ask the child to draw a place or setting where the story happens."
         }
     }
 

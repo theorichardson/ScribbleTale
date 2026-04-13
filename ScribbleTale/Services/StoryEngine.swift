@@ -102,11 +102,11 @@ final class StoryEngine {
         let context = contextParts.joined(separator: " ")
 
         let beatGuide: String = switch chapter.beat {
-        case .character: "Name the hero and give them one trait."
-        case .companion: "Introduce a companion or pet."
+        case .character: "Name the animal hero and give them one trait."
+        case .companion: "Introduce a companion animal or creature."
         case .setting: "Describe the place with one vivid detail."
         case .object: "The hero finds a special object or tool."
-        case .villain: "Introduce who or what is causing trouble."
+        case .villain: "Introduce the animal or creature causing trouble."
         case .climax: "The hero tries something brave to fix the problem."
         case .resolution: "The problem is solved and the hero has grown."
         }
@@ -227,7 +227,7 @@ final class StoryEngine {
     // MARK: - Private
 
     private func storySystemPrompt(for storyType: StoryType) -> String {
-        "You are a storyteller writing a short \(storyType.rawValue) picture book for kids. Use simple, concrete language. Keep every response to 1-2 sentences maximum."
+        "You are a storyteller writing a short \(storyType.rawValue) picture book for kids. All characters are animals or creatures — never humans or people. Use simple, concrete language. Keep every response to 1-2 sentences maximum."
     }
 
     private static let controlTokenPattern = /(<end_of_turn>|<start_of_turn>|<eos>|<bos>|<pad>)/
