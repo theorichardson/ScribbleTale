@@ -1,4 +1,7 @@
+import os
 import SwiftUI
+
+private let log = Logger(subsystem: "com.scribbletale.app", category: "StoryTypeSelection")
 
 struct StoryTypeSelectionView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
@@ -32,10 +35,19 @@ struct StoryTypeSelectionView: View {
         )
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            log.info("task: starting model load + availability checks")
             isModelLoading = true
+
+            log.info("task: loading LLM...")
             await coordinator.storyEngine.loadModel()
+            log.info("task: LLM load finished — isLoaded=\(coordinator.storyEngine.isLoaded)")
+
+            log.info("task: checking Image Playground availability...")
             await coordinator.imageService.checkAvailability()
+            log.info("task: Image Playground check done — available=\(coordinator.imageService.isPlaygroundAvailable)")
+
             isModelLoading = false
+            log.info("task: all loading complete")
         }
     }
 
@@ -74,12 +86,23 @@ struct StoryTypeSelectionView: View {
         VStack(spacing: 12) {
             ProgressView(value: coordinator.storyEngine.loadingProgress)
                 .tint(.purple)
-            Text("Loading story brain and image engines...")
+
+            Text(coordinator.storyEngine.loadingStatus.isEmpty
+                 ? "Preparing..."
+                 : coordinator.storyEngine.loadingStatus)
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.secondary)
-            Text("First time may take a moment to download the model")
-                .font(.system(.caption2, design: .rounded))
-                .foregroundStyle(.tertiary)
+                .animation(.easeInOut(duration: 0.2), value: coordinator.storyEngine.loadingStatus)
+
+            if coordinator.storyEngine.loadingProgress > 0 && coordinator.storyEngine.loadingProgress < 1.0 {
+                Text("First time may take a moment to download (~2.5 GB)")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            } else if coordinator.storyEngine.isLoaded && !coordinator.imageService.isAvailable {
+                Text("Checking Image Playground...")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 40)
         .padding(.vertical, 8)
@@ -87,6 +110,10 @@ struct StoryTypeSelectionView: View {
 
     private var availabilitySummary: some View {
         VStack(spacing: 6) {
+            availabilityLine(
+                title: "Story Engine (Gemma 3 4B)",
+                available: coordinator.storyEngine.isLoaded
+            )
             availabilityLine(
                 title: "Image Playground",
                 available: coordinator.imageService.isPlaygroundAvailable

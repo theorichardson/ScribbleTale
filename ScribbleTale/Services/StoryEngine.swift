@@ -1,6 +1,9 @@
 import Foundation
+import os
 import MLXLLM
 import MLXLMCommon
+
+private let log = Logger(subsystem: "com.scribbletale.app", category: "StoryEngine")
 
 @Observable
 @MainActor
@@ -9,29 +12,47 @@ final class StoryEngine {
     private(set) var isLoaded = false
     private(set) var isGenerating = false
     private(set) var loadingProgress: Double = 0
+    private(set) var loadingStatus: String = ""
 
     private static let modelID = "mlx-community/gemma-3-4b-it-4bit"
 
     func loadModel() async {
-        guard !isLoaded else { return }
+        guard !isLoaded else {
+            log.info("loadModel: already loaded, skipping")
+            return
+        }
+        log.info("loadModel: starting — model=\(Self.modelID, privacy: .public)")
+        loadingStatus = "Downloading model..."
+
         do {
             let config = ModelConfiguration(id: Self.modelID)
+            log.info("loadModel: config created, calling loadContainer")
             modelContainer = try await LLMModelFactory.shared.loadContainer(
                 configuration: config
             ) { progress in
                 Task { @MainActor in
                     self.loadingProgress = progress.fractionCompleted
+                    if progress.fractionCompleted < 1.0 {
+                        let pct = Int(progress.fractionCompleted * 100)
+                        self.loadingStatus = "Downloading model... \(pct)%"
+                    } else {
+                        self.loadingStatus = "Loading model into memory..."
+                    }
                 }
             }
             isLoaded = true
+            loadingStatus = "Model ready"
+            log.info("loadModel: SUCCESS — model loaded and ready")
         } catch {
-            print("Failed to load model: \(error)")
+            loadingStatus = "Model failed to load"
+            log.error("loadModel: FAILED — \(error, privacy: .public)")
         }
     }
 
     // MARK: - Generation Methods
 
     func generateIntroduction(for storyType: StoryType) -> AsyncThrowingStream<String, Error> {
+        log.info("generateIntroduction: storyType=\(storyType.rawValue, privacy: .public)")
         let prompt = """
         Write a ONE-sentence hook (under 15 words) for a \(storyType.rawValue) story. \
         Set the scene with a concrete place and a hint of what's about to happen. \
@@ -53,6 +74,7 @@ final class StoryEngine {
         previousChapters: [Chapter],
         introText: String = ""
     ) -> AsyncThrowingStream<String, Error> {
+        log.info("generateDrawingPrompt: ch\(chapter.index) beat=\(chapter.beat.rawValue, privacy: .public) subject=\(chapter.drawingSubject.displayName, privacy: .public)")
         var contextParts: [String] = []
         if !introText.isEmpty { contextParts.append(introText) }
         contextParts += previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }
@@ -79,6 +101,7 @@ final class StoryEngine {
         previousChapters: [Chapter],
         introText: String = ""
     ) -> AsyncThrowingStream<String, Error> {
+        log.info("generateNarration: ch\(chapter.index) beat=\(chapter.beat.rawValue, privacy: .public) drawingPrompt=\(chapter.drawingPrompt, privacy: .public) priorChapters=\(previousChapters.count)")
         var contextParts: [String] = []
         if !introText.isEmpty { contextParts.append(introText) }
         contextParts += previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }
@@ -211,11 +234,14 @@ final class StoryEngine {
         maxTokens: Int = 100
     ) -> AsyncThrowingStream<String, Error> {
         guard let modelContainer else {
+            log.error("streamText: model not loaded, returning empty stream")
             return AsyncThrowingStream { $0.finish() }
         }
 
         let container = modelContainer
         let params = GenerateParameters(maxTokens: maxTokens, temperature: 0.6, topP: 0.9)
+        let promptPreview = String(userPrompt.prefix(80))
+        log.info("streamText: starting — maxTokens=\(maxTokens) prompt=\"\(promptPreview, privacy: .public)...\"")
 
         return AsyncThrowingStream { continuation in
             Task { @MainActor in
@@ -228,8 +254,10 @@ final class StoryEngine {
                     generateParameters: params
                 )
 
+                var tokenCount = 0
                 do {
                     for try await chunk in session.streamResponse(to: userPrompt) {
+                        tokenCount += 1
                         if chunk.contains("<end_of_turn>") || chunk.contains("<eos>") {
                             let cleaned = chunk.replacing(Self.controlTokenPattern, with: "")
                             if !cleaned.isEmpty { continuation.yield(cleaned) }
@@ -238,8 +266,10 @@ final class StoryEngine {
                         let cleaned = chunk.replacing(Self.controlTokenPattern, with: "")
                         if !cleaned.isEmpty { continuation.yield(cleaned) }
                     }
+                    log.info("streamText: completed — \(tokenCount) tokens")
                     continuation.finish()
                 } catch {
+                    log.error("streamText: error after \(tokenCount) tokens — \(error, privacy: .public)")
                     continuation.finish(throwing: error)
                 }
             }
