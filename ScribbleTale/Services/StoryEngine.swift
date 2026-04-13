@@ -10,7 +10,7 @@ final class StoryEngine {
     private(set) var isGenerating = false
     private(set) var loadingProgress: Double = 0
 
-    private static let modelID = "mlx-community/gemma-3-1b-it-4bit"
+    private static let modelID = "mlx-community/gemma-3-4b-it-4bit"
 
     func loadModel() async {
         guard !isLoaded else { return }
@@ -73,36 +73,16 @@ final class StoryEngine {
         )
     }
 
-    func generateImagePrompt(
-        for chapter: Chapter,
-        storyType: StoryType,
-        drawingPrompt: String
-    ) -> AsyncThrowingStream<String, Error> {
-        let prompt = """
-        \(chapter.drawingSubject.pipelineContext) \
-        Based on the child's drawing for the prompt "\(drawingPrompt)" in a \
-        \(storyType.rawValue) story, write a SHORT image caption (one sentence, under 15 words) \
-        describing the \(chapter.drawingSubject.displayName.lowercased()) vividly. \
-        CRITICAL: Do NOT describe any humans, people, boys, girls, men, or women. \
-        If the subject is a character, describe them as a creature, animal, robot, or fantastical being instead. \
-        Name only the main subject and its setting — do NOT describe colors, art style, medium, or technique. \
-        Stay faithful to what the drawing prompt asked for. \
-        Only output the caption.
-        """
-        return streamText(
-            systemPrompt: storySystemPrompt(for: storyType),
-            userPrompt: prompt
-        )
-    }
-
     func generateNarration(
         for chapter: Chapter,
         storyType: StoryType,
-        previousChapters: [Chapter]
+        previousChapters: [Chapter],
+        introText: String = ""
     ) -> AsyncThrowingStream<String, Error> {
-        let context = previousChapters
-            .compactMap { $0.narration.isEmpty ? nil : $0.narration }
-            .joined(separator: " ")
+        var contextParts: [String] = []
+        if !introText.isEmpty { contextParts.append(introText) }
+        contextParts += previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }
+        let context = contextParts.joined(separator: " ")
 
         let beatGuide: String = switch chapter.beat {
         case .character: "Introduce the main character — give them a name and one clear personality trait."
@@ -118,7 +98,7 @@ final class StoryEngine {
         Continue this \(storyType.rawValue) story (1-2 short sentences only). \
         Chapter \(chapter.index + 1) of \(Story.chapterCount) — \(chapter.beat.rawValue). \(beatGuide) \
         \(context.isEmpty ? "" : "Story so far: \(context) ") \
-        The child just drew \(chapter.drawingSubject.displayName.lowercased()) for the story. \
+        The child's drawing prompt was: "\(chapter.drawingPrompt)". \
         Do NOT describe what the drawing looks like or write an image caption. \
         Write ONLY the next story event — what happens, what someone says, or what changes. \
         Stay consistent with the story so far. Use plain, concrete language. \
@@ -168,28 +148,23 @@ final class StoryEngine {
         return result
     }
 
-    /// Cleans narration output, dropping a leading image-caption-like sentence
-    /// that small LLMs sometimes emit before the actual story text.
-    static func cleanNarration(_ text: String, imagePrompt: String) -> String {
+    /// Cleans narration output, dropping a leading sentence if it echoes
+    /// the drawing prompt rather than advancing the story.
+    static func cleanNarration(_ text: String, drawingPrompt: String) -> String {
         let base = cleanGeneratedText(text)
 
         let sentences = base.splitSentences()
-        guard sentences.count > 2 else { return base }
+        guard sentences.count > 1 else { return base }
 
-        // If the first sentence is suspiciously similar to the image prompt,
-        // it's an echoed caption — drop it.
         let first = sentences[0].lowercased()
-        let prompt = imagePrompt.lowercased()
+        let prompt = drawingPrompt.lowercased()
         let similarity = first.commonWordRatio(with: prompt)
         if similarity > 0.4 {
             return sentences.dropFirst().joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        // Keep the last 2 sentences — the prompt asks for 1-2, so anything
-        // beyond that is likely preamble.
-        return sentences.suffix(2).joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return base
     }
 
     /// Cleans a drawing prompt, keeping only the "Draw a ..." sentence.
@@ -211,50 +186,6 @@ final class StoryEngine {
         }
 
         return result
-    }
-
-    /// Cleans an image-generation caption.
-    /// The small LLM often returns multiple lines — we pick the first substantive
-    /// sentence and discard the rest.  Returns empty string for system-prompt echoes
-    /// so the caller's fallback kicks in.
-    static func cleanImagePrompt(_ text: String) -> String {
-        let cleaned = cleanGeneratedText(text)
-
-        let lines = cleaned
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        let best = lines.first ?? cleaned
-
-        if looksLikeSystemEcho(best) { return "" }
-
-        if let dotRange = best.range(of: ".", options: .literal) {
-            let sentence = String(best[best.startIndex..<dotRange.lowerBound])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sentence.isEmpty {
-                return looksLikeSystemEcho(sentence) ? "" : sentence
-            }
-        }
-
-        return best
-    }
-
-    /// Detects when the LLM echoed the system prompt or produced meta-text
-    /// instead of an actual image description.
-    private static func looksLikeSystemEcho(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        let echoMarkers = [
-            "story for",
-            "year old audience",
-            "aged 6",
-            "kids aged",
-            "children's storyteller",
-            "picture book",
-            "write a",
-            "write like",
-        ]
-        return echoMarkers.contains { lower.contains($0) }
     }
 
     // MARK: - Private

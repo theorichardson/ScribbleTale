@@ -91,42 +91,40 @@ struct IntroductionView: View {
         guard let story = coordinator.story else { return }
 
         do {
-            var prompt = ""
+            var raw = ""
             for try await token in coordinator.storyEngine.generateIntroduction(for: story.storyType) {
-                prompt += token
-                introText = prompt
+                raw += token
+                introText = raw
             }
-            story.introText = StoryEngine.cleanGeneratedText(prompt)
+            story.introText = StoryEngine.cleanGeneratedText(raw)
             introText = story.introText
         } catch {
             errorMessage = "Oops! The story brain had a hiccup. Try again!"
             print("Generation error: \(error)")
+            return
+        }
+
+        // Generate only the first chapter's drawing prompt
+        if let firstChapter = story.chapters.first {
+            do {
+                var drawPrompt = ""
+                for try await token in coordinator.storyEngine.generateDrawingPrompt(
+                    for: firstChapter,
+                    storyType: story.storyType,
+                    previousChapters: [],
+                    introText: story.introText
+                ) {
+                    drawPrompt += token
+                }
+                firstChapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
+            } catch {
+                print("Drawing prompt generation error: \(error)")
+            }
         }
 
         withAnimation(.easeOut(duration: 0.5)) {
             isReady = true
             showButton = true
-        }
-
-        await generateDrawingPrompts(for: story)
-    }
-
-    private func generateDrawingPrompts(for story: Story) async {
-        do {
-            for chapter in story.chapters {
-                var drawPrompt = ""
-                for try await token in coordinator.storyEngine.generateDrawingPrompt(
-                    for: chapter,
-                    storyType: story.storyType,
-                    previousChapters: Array(story.chapters.prefix(chapter.index)),
-                    introText: story.introText
-                ) {
-                    drawPrompt += token
-                }
-                chapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
-            }
-        } catch {
-            print("Drawing prompt generation error: \(error)")
         }
     }
 

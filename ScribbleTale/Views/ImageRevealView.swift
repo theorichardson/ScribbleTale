@@ -34,7 +34,7 @@ struct ImageRevealView: View {
     @State private var imageScale: CGFloat = 0.8
     @State private var imageOpacity: Double = 0
     @State private var generationError: String?
-    @State private var generationStatus = "Preparing image prompts..."
+    @State private var generationStatus = "Bringing your drawing to life..."
 
     private var chapter: Chapter? {
         coordinator.story?.chapters[safe: chapterIndex]
@@ -195,42 +195,33 @@ struct ImageRevealView: View {
             return
         }
 
+        // Build image prompt directly from drawing prompt -- no LLM rewrite
+        chapter.imageGenerationPrompt = "\(chapter.drawingSubject.pipelineContext) \(chapter.drawingPrompt)."
+
         log.info("""
-            generateContent: START chapter \(self.chapterIndex)
+            generateContent: chapter \(self.chapterIndex)
               beat=\(chapter.beat.rawValue, privacy: .public), subject=\(chapter.drawingSubject.displayName, privacy: .public)
               drawingPrompt=\(chapter.drawingPrompt, privacy: .public)
+              imagePrompt=\(chapter.imageGenerationPrompt, privacy: .public)
               strokes=\(chapter.drawing.strokes.count)
             """)
 
-        generationStatus = "Building image prompt..."
-        do {
-            var imgPrompt = ""
-            for try await token in coordinator.storyEngine.generateImagePrompt(
-                for: chapter,
-                storyType: story.storyType,
-                drawingPrompt: chapter.drawingPrompt
-            ) {
-                imgPrompt += token
-            }
-            chapter.imageGenerationPrompt = StoryEngine.cleanImagePrompt(imgPrompt)
-            log.info("generateContent: LLM image prompt = \"\(chapter.imageGenerationPrompt, privacy: .public)\"")
-        } catch {
-            log.error("generateContent: LLM image prompt generation failed — \(error, privacy: .public)")
-        }
-
-        if chapter.imageGenerationPrompt.isEmpty {
-            chapter.imageGenerationPrompt =
-                "\(chapter.drawingSubject.pipelineContext) Picture-book scene: \(chapter.drawingPrompt)."
-            log.warning("generateContent: LLM prompt was empty, using fallback: \"\(chapter.imageGenerationPrompt, privacy: .public)\"")
-        }
-
-        generationStatus = "Generating image..."
+        // Run image generation and narration in parallel
+        generationStatus = "Bringing your drawing to life..."
         async let imageWork = generateImage(for: chapter)
         async let narrationWork = bufferNarration(for: chapter, in: story)
         _ = await imageWork
         _ = await narrationWork
 
+        // Reveal narration with word-by-word animation
         await revealBufferedNarration()
+
+        // Generate the NEXT chapter's drawing prompt (now that this chapter's narration exists)
+        let nextIndex = chapterIndex + 1
+        if nextIndex < Story.chapterCount {
+            let nextChapter = story.chapters[nextIndex]
+            await generateNextDrawingPrompt(for: nextChapter, in: story)
+        }
 
         withAnimation(.easeOut(duration: 0.5)) {
             isReady = true
@@ -238,7 +229,6 @@ struct ImageRevealView: View {
     }
 
     private func generateImage(for chapter: Chapter) async {
-        log.info("generateImage: dispatching")
         do {
             let image = try await coordinator.imageService.generateImage(
                 from: chapter.drawing,
@@ -268,18 +258,38 @@ struct ImageRevealView: View {
             for try await token in coordinator.storyEngine.generateNarration(
                 for: chapter,
                 storyType: story.storyType,
-                previousChapters: previousChapters
+                previousChapters: previousChapters,
+                introText: story.introText
             ) {
                 narration += token
             }
             let cleaned = StoryEngine.cleanNarration(
                 narration,
-                imagePrompt: chapter.imageGenerationPrompt
+                drawingPrompt: chapter.drawingPrompt
             )
             bufferedNarration = cleaned
             chapter.narration = cleaned
         } catch {
             log.error("bufferNarration: failed — \(error, privacy: .public)")
+        }
+    }
+
+    private func generateNextDrawingPrompt(for nextChapter: Chapter, in story: Story) async {
+        do {
+            let previousChapters = Array(story.chapters.prefix(nextChapter.index))
+            var drawPrompt = ""
+            for try await token in coordinator.storyEngine.generateDrawingPrompt(
+                for: nextChapter,
+                storyType: story.storyType,
+                previousChapters: previousChapters,
+                introText: story.introText
+            ) {
+                drawPrompt += token
+            }
+            nextChapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
+            log.info("generateNextDrawingPrompt: ch\(nextChapter.index) prompt = \"\(nextChapter.drawingPrompt, privacy: .public)\"")
+        } catch {
+            log.error("generateNextDrawingPrompt: failed — \(error, privacy: .public)")
         }
     }
 
