@@ -58,19 +58,12 @@ struct DrawingView: View {
     }
 
     private var promptBanner: some View {
-        VStack(spacing: 6) {
-            if let subject = chapter?.drawingSubject {
-                Label(subject.displayName, systemImage: subject.icon)
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
-            }
-            Text(chapter?.drawingPrompt ?? "Draw something!")
-                .font(.system(.title2, design: .rounded, weight: .bold))
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
+        Text(chapter?.drawingPrompt ?? "Draw something!")
+            .font(.system(.title2, design: .rounded, weight: .bold))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
     }
 
     private var canvas: some View {

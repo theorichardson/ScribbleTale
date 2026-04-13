@@ -6,27 +6,12 @@ import CoreGraphics
 
 private let log = Logger(subsystem: "com.scribbletale.app", category: "ImageGeneration")
 
-struct ImageComparisonResult {
-    let playgroundImage: CGImage?
-    let coreMLImage: CGImage?
-    let playgroundError: String?
-    let coreMLError: String?
-}
-
 @Observable
 @MainActor
 final class ImageGenerationService {
     private(set) var isGenerating = false
     private(set) var isPlaygroundAvailable = false
-    private(set) var isCoreMLAvailable = false
-    private(set) var coreMLStatusMessage: String?
-    private(set) var coreMLStep = 0
-    private(set) var coreMLTotalSteps = 0
-    var isAvailable: Bool { isPlaygroundAvailable || isCoreMLAvailable }
-
-    private var creator: ImageCreator?
-    private var style: ImagePlaygroundStyle?
-    private let coreMLService = CoreMLStableDiffusionService()
+    var isAvailable: Bool { isPlaygroundAvailable }
 
     private static let minStrokesForDrawingConcept = 3
 
@@ -50,6 +35,8 @@ final class ImageGenerationService {
         (#"\bbrave hero\b"#, "brave lion"),
         (#"\bevil villain\b"#, "shadowy dragon"),
         (#"\bevil witch\b"#, "dark raven"),
+        (#"\byear.old\b"#, ""),
+        (#"\bfamily members?\b"#, "woodland creatures"),
     ]
 
     private static let wordReplacements: [(pattern: String, replacement: String)] = [
@@ -65,6 +52,9 @@ final class ImageGenerationService {
         (#"\bchildren\b"#, "rabbits"),
         (#"\bkid\b"#, "squirrel"),
         (#"\bkids\b"#, "squirrels"),
+        (#"\bbaby\b"#, "tiny bunny"),
+        (#"\btoddler\b"#, "small bunny"),
+        (#"\bteenager\b"#, "young fox"),
         (#"\bking\b"#, "lion king"),
         (#"\bqueen\b"#, "swan queen"),
         (#"\bprince\b"#, "young stag"),
@@ -80,6 +70,15 @@ final class ImageGenerationService {
         (#"\bcaptain\b"#, "great eagle"),
         (#"\bfriend\b"#, "companion"),
         (#"\bcharacter\b"#, "creature"),
+        (#"\bmother\b"#, "kind fox"),
+        (#"\bfather\b"#, "strong bear"),
+        (#"\bparent\b"#, "elder owl"),
+        (#"\bparents\b"#, "elder owls"),
+        (#"\bsister\b"#, "little fox"),
+        (#"\bbrother\b"#, "little bear"),
+        (#"\bfamily\b"#, "woodland clan"),
+        (#"\baudience\b"#, "gathering"),
+        (#"\belderly\b"#, "ancient"),
     ]
 
     static func depersonalizePrompt(_ prompt: String) -> String {
@@ -109,25 +108,20 @@ final class ImageGenerationService {
         log.info("checkAvailability: starting")
 
         do {
-            let c = try await ImageCreator()
-            let available = c.availableStyles
+            let creator = try await ImageCreator()
+            let available = creator.availableStyles
             log.info("checkAvailability: ImageCreator OK — availableStyles=\(available.map { String(describing: $0) }, privacy: .public)")
-            creator = c
-            style = Self.preferredStyle(from: available)
-            isPlaygroundAvailable = style != nil
+            isPlaygroundAvailable = !available.isEmpty
         } catch {
             log.error("checkAvailability: ImageCreator failed — \(error, privacy: .public)")
             isPlaygroundAvailable = false
         }
 
-        coreMLService.checkAvailability()
-        isCoreMLAvailable = coreMLService.isAvailable
-        coreMLStatusMessage = coreMLService.unavailabilityReason
-        log.info("checkAvailability: done — playground=\(self.isPlaygroundAvailable), coreML=\(self.isCoreMLAvailable)")
+        log.info("checkAvailability: done — playground=\(self.isPlaygroundAvailable)")
     }
 
     private static func preferredStyle(from available: [ImagePlaygroundStyle]) -> ImagePlaygroundStyle? {
-        let order: [ImagePlaygroundStyle] = [.sketch, .illustration]
+        let order: [ImagePlaygroundStyle] = [.sketch, .illustration, .animation]
         for candidate in order where available.contains(candidate) {
             return candidate
         }
@@ -136,41 +130,30 @@ final class ImageGenerationService {
 
     // MARK: - Generation
 
-    func generateComparisonImages(from drawing: PKDrawing, prompt: String) async -> ImageComparisonResult {
-        isGenerating = true
-        coreMLStep = 0
-        coreMLTotalSteps = 0
-        defer { isGenerating = false }
-
-        async let playgroundResult = runPlayground(from: drawing, prompt: prompt)
-        async let coreMLResult = runCoreML(prompt: prompt)
-
-        let (pg, cml) = await (playgroundResult, coreMLResult)
-
-        return ImageComparisonResult(
-            playgroundImage: pg.image,
-            coreMLImage: cml.image,
-            playgroundError: pg.error,
-            coreMLError: cml.error
-        )
-    }
-
     func generateImage(from drawing: PKDrawing, prompt: String) async throws -> CGImage? {
-        let result = await generateComparisonImages(from: drawing, prompt: prompt)
-        if let coreMLImage = result.coreMLImage {
-            return coreMLImage
+        log.info("generateImage: starting — prompt=\(prompt, privacy: .public)")
+        isGenerating = true
+        defer {
+            isGenerating = false
+            log.info("generateImage: finished")
         }
-        if let playgroundImage = result.playgroundImage {
-            return playgroundImage
+
+        guard isPlaygroundAvailable else {
+            log.error("generateImage: Image Playground not available")
+            throw ImageGenerationError.playgroundNotAvailable
         }
-        throw ImageGenerationError.generationFailed
-    }
 
-    // MARK: - Image Playground
+        let creator: ImageCreator
+        do {
+            creator = try await ImageCreator()
+        } catch {
+            log.error("generateImage: ImageCreator init failed — \(error, privacy: .public)")
+            throw ImageGenerationError.generationFailed
+        }
 
-    private func runPlayground(from drawing: PKDrawing, prompt: String) async -> (image: CGImage?, error: String?) {
-        guard isPlaygroundAvailable, let creator, let style else {
-            return (nil, ImageGenerationError.playgroundNotAvailable.errorDescription)
+        guard let style = Self.preferredStyle(from: creator.availableStyles) else {
+            log.error("generateImage: no available styles")
+            throw ImageGenerationError.playgroundNotAvailable
         }
 
         let sanitizedPrompt = Self.depersonalizePrompt(prompt)
@@ -181,76 +164,90 @@ final class ImageGenerationService {
             && bounds.width >= 20
             && bounds.height >= 20
 
-        log.info("runPlayground: prompt=\(sanitizedPrompt, privacy: .public), drawingUsable=\(drawingUsable) (strokes=\(strokeCount))")
+        log.info("generateImage: prompt=\(sanitizedPrompt, privacy: .public), style=\(String(describing: style), privacy: .public), drawingUsable=\(drawingUsable) (strokes=\(strokeCount))")
 
+        if let image = try await attemptGeneration(
+            creator: creator, style: style, prompt: sanitizedPrompt,
+            drawing: drawing, drawingUsable: drawingUsable
+        ) {
+            return image
+        }
+
+        let safePrompt = Self.ultraSafePrompt(from: sanitizedPrompt)
+        log.info("generateImage: retrying with ultra-safe prompt — \(safePrompt, privacy: .public)")
+        return try await attemptGeneration(
+            creator: creator, style: style, prompt: safePrompt,
+            drawing: drawing, drawingUsable: drawingUsable
+        )
+    }
+
+    /// Strips everything except nouns/adjectives that are clearly non-human,
+    /// producing a prompt Image Playground should always accept.
+    private static func ultraSafePrompt(from prompt: String) -> String {
+        var result = prompt
+        let personAdjacentPatterns: [String] = [
+            #"\b\d+-\d+\b"#,
+            #"\byear.?old\b"#,
+            #"\baudience\b"#,
+            #"\bstory\b"#,
+            #"\btale\b"#,
+        ]
+        for pattern in personAdjacentPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            result = regex.stringByReplacingMatches(
+                in: result, range: NSRange(result.startIndex..., in: result), withTemplate: ""
+            )
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        if result.count < 5 {
+            result = "a colorful creature in a magical forest"
+        }
+        return result
+    }
+
+    private func attemptGeneration(
+        creator: ImageCreator, style: ImagePlaygroundStyle, prompt: String,
+        drawing: PKDrawing, drawingUsable: Bool
+    ) async throws -> CGImage? {
         let conceptSets: [([ImagePlaygroundConcept], String)]
         if drawingUsable {
             conceptSets = [
-                ([.drawing(drawing), .text(sanitizedPrompt)], "drawing+text"),
-                ([.text(sanitizedPrompt)], "text-only"),
+                ([.drawing(drawing), .text(prompt)], "drawing+text"),
+                ([.text(prompt)], "text-only"),
             ]
         } else {
-            conceptSets = [([.text(sanitizedPrompt)], "text-only")]
+            conceptSets = [([.text(prompt)], "text-only")]
         }
 
+        var lastError: Error?
         for (concepts, label) in conceptSets {
             do {
                 for try await result in creator.images(for: concepts, style: style, limit: 1) {
-                    log.info("runPlayground: SUCCESS via '\(label, privacy: .public)'")
-                    return (result.cgImage, nil)
+                    log.info("generateImage: SUCCESS via '\(label, privacy: .public)'")
+                    return result.cgImage
                 }
-                log.warning("runPlayground: '\(label, privacy: .public)' stream completed with no images")
-            } catch where String(describing: error).contains("conceptsRequirePersonIdentity") {
-                log.warning("runPlayground: '\(label, privacy: .public)' hit personIdentity — trying next concept set")
-                continue
+                log.warning("generateImage: '\(label, privacy: .public)' stream completed with no images")
             } catch {
-                log.error("runPlayground: '\(label, privacy: .public)' failed — \(error, privacy: .public)")
-                return (nil, error.localizedDescription)
+                log.warning("generateImage: '\(label, privacy: .public)' failed — \(error, privacy: .public)")
+                lastError = error
+                continue
             }
         }
 
-        return (nil, ImageGenerationError.generationFailed.errorDescription)
-    }
-
-    // MARK: - Core ML Stable Diffusion
-
-    private func runCoreML(prompt: String) async -> (image: CGImage?, error: String?) {
-        guard isCoreMLAvailable else {
-            return (nil, coreMLStatusMessage ?? ImageGenerationError.coreMLNotAvailable.errorDescription)
-        }
-
-        let service = coreMLService
-        do {
-            let image = try await Task.detached(priority: .userInitiated) {
-                try service.generateImage(
-                    prompt: prompt,
-                    negativePrompt: "deformed, extra limbs, blurry, low quality"
-                ) { [weak self] progress in
-                    Task { @MainActor in
-                        self?.coreMLStep = progress.step
-                        self?.coreMLTotalSteps = progress.totalSteps
-                    }
-                }
-            }.value
-            return (image, nil)
-        } catch {
-            log.error("runCoreML: failed — \(error, privacy: .public)")
-            return (nil, error.localizedDescription)
-        }
+        if let lastError { throw lastError }
+        return nil
     }
 }
 
 enum ImageGenerationError: LocalizedError {
     case playgroundNotAvailable
-    case coreMLNotAvailable
     case generationFailed
 
     var errorDescription: String? {
         switch self {
         case .playgroundNotAvailable:
             "Image Playground is not available on this device. Apple Intelligence is required."
-        case .coreMLNotAvailable:
-            "Core ML Stable Diffusion resources are missing."
         case .generationFailed:
             "Failed to generate image. Please try again."
         }

@@ -10,9 +10,6 @@ packages:
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     from: "2.31.3"
-  ml-stable-diffusion:
-    url: https://github.com/apple/ml-stable-diffusion
-    from: "1.1.1"
 
 targets:
   ScribbleTale:
@@ -51,8 +48,6 @@ targets:
         product: MLXLLM
       - package: mlx-swift-lm
         product: MLXLMCommon
-      - package: ml-stable-diffusion
-        product: StableDiffusion
     entitlements:
       path: ScribbleTale/ScribbleTale.entitlements
       properties: {}

@@ -91,19 +91,6 @@ struct StoryTypeSelectionView: View {
                 title: "Image Playground",
                 available: coordinator.imageService.isPlaygroundAvailable
             )
-            availabilityLine(
-                title: "Core ML Stable Diffusion",
-                available: coordinator.imageService.isCoreMLAvailable
-            )
-
-            if let coreMLStatus = coordinator.imageService.coreMLStatusMessage,
-               !coordinator.imageService.isCoreMLAvailable {
-                Text(coreMLStatus)
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 6)
-            }
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))

@@ -146,10 +146,10 @@ final class StoryEngine {
 
         let preamblePatterns: [String] = [
             #"^(?:okay|ok|sure|alright|great|absolutely)[,!.]?\s*"#,
-            #"^here(?:'s| is| are)\s+.*?:\s*"#,
+            #"^here(?:['''\u{2018}\u{2019}]s| is| are)\s+.*?:\s*"#,
             #"^(?:the )?(?:continuation|next part|story continues|story so far).*?:\s*"#,
             #"^chapter\s+\d+\s*(?:of\s+\d+)?[:\s—–-]*"#,
-            #"^["""]|["""]$"#,
+            #"^["""\u{201C}\u{201D}]|["""\u{201C}\u{201D}]$"#,
         ]
 
         for pattern in preamblePatterns {
@@ -215,7 +215,8 @@ final class StoryEngine {
 
     /// Cleans an image-generation caption.
     /// The small LLM often returns multiple lines — we pick the first substantive
-    /// sentence and discard the rest.
+    /// sentence and discard the rest.  Returns empty string for system-prompt echoes
+    /// so the caller's fallback kicks in.
     static func cleanImagePrompt(_ text: String) -> String {
         let cleaned = cleanGeneratedText(text)
 
@@ -226,14 +227,34 @@ final class StoryEngine {
 
         let best = lines.first ?? cleaned
 
-        // Truncate to first sentence if there's a period
+        if looksLikeSystemEcho(best) { return "" }
+
         if let dotRange = best.range(of: ".", options: .literal) {
             let sentence = String(best[best.startIndex..<dotRange.lowerBound])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sentence.isEmpty { return sentence }
+            if !sentence.isEmpty {
+                return looksLikeSystemEcho(sentence) ? "" : sentence
+            }
         }
 
         return best
+    }
+
+    /// Detects when the LLM echoed the system prompt or produced meta-text
+    /// instead of an actual image description.
+    private static func looksLikeSystemEcho(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let echoMarkers = [
+            "story for",
+            "year old audience",
+            "aged 6",
+            "kids aged",
+            "children's storyteller",
+            "picture book",
+            "write a",
+            "write like",
+        ]
+        return echoMarkers.contains { lower.contains($0) }
     }
 
     // MARK: - Private

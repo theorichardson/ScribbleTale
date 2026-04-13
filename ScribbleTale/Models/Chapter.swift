@@ -91,8 +91,6 @@ final class Chapter: Identifiable, @unchecked Sendable {
     var imageGenerationPrompt: String
     var drawing: PKDrawing
     var generatedImage: CGImage?
-    var playgroundGeneratedImage: CGImage?
-    var coreMLGeneratedImage: CGImage?
     var narration: String
 
     init(

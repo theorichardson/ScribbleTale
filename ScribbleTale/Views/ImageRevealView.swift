@@ -26,16 +26,14 @@ struct ImageRevealView: View {
     let chapterIndex: Int
 
     @Environment(StoryFlowCoordinator.self) private var coordinator
-    @State private var playgroundImage: CGImage?
-    @State private var coreMLImage: CGImage?
+    @State private var generatedImage: CGImage?
     @State private var narrationText = ""
     @State private var bufferedNarration = ""
     @State private var isGeneratingImage = true
     @State private var isReady = false
     @State private var imageScale: CGFloat = 0.8
     @State private var imageOpacity: Double = 0
-    @State private var playgroundError: String?
-    @State private var coreMLError: String?
+    @State private var generationError: String?
     @State private var generationStatus = "Preparing image prompts..."
 
     private var chapter: Chapter? {
@@ -87,19 +85,9 @@ struct ImageRevealView: View {
     }
 
     private var chapterHeader: some View {
-        VStack(spacing: 4) {
-            Text("Chapter \(chapterIndex + 1) of \(Story.chapterCount)")
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                .foregroundStyle(.secondary)
-            if let subject = chapter?.drawingSubject {
-                Label(subject.displayName, systemImage: subject.icon)
-                    .font(.system(.caption, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            Text(chapter?.beat.rawValue ?? "")
-                .font(.system(.title, design: .rounded, weight: .bold))
-                .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
-        }
+        Text(chapter?.drawingSubject.displayName ?? "")
+            .font(.system(.title, design: .rounded, weight: .bold))
+            .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
     }
 
     private var imageSection: some View {
@@ -111,8 +99,6 @@ struct ImageRevealView: View {
                     Text(generationStatus)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
-
-                    coreMLProgressView
                 }
             } else if isGeneratingImage {
                 RoundedRectangle(cornerRadius: 20)
@@ -125,75 +111,30 @@ struct ImageRevealView: View {
                             Text(generationStatus)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(.secondary)
-                            coreMLProgressView
                         }
                     }
+            } else if let image = generatedImage {
+                Image(decorative: image, scale: 1.0)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
+                    .scaleEffect(imageScale)
+                    .opacity(imageOpacity)
             } else {
-                VStack(spacing: 20) {
-                    comparisonCard(
-                        title: "Apple Image Playground",
-                        image: playgroundImage,
-                        error: playgroundError
-                    )
-                    comparisonCard(
-                        title: "Core ML Stable Diffusion",
-                        image: coreMLImage,
-                        error: coreMLError
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var coreMLProgressView: some View {
-        let step = coordinator.imageService.coreMLStep
-        let total = coordinator.imageService.coreMLTotalSteps
-        if total > 0 {
-            VStack(spacing: 4) {
-                ProgressView(value: Double(step), total: Double(total))
-                    .tint(coordinator.story?.storyType.color ?? .purple)
-                    .frame(width: 200)
-                Text("Core ML step \(step)/\(total)")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.top, 4)
-        }
-    }
-
-    private func comparisonCard(title: String, image: CGImage?, error: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.primary)
-
-            Group {
-                if let image {
-                    Image(decorative: image, scale: 1.0)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
-                        .scaleEffect(imageScale)
-                        .opacity(imageOpacity)
-                } else {
-                    userDrawingFallback
-                        .overlay(alignment: .bottom) {
-                            if let error {
-                                Text(error)
-                                    .font(.system(.caption2, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .multilineTextAlignment(.center)
-                                    .padding(8)
-                                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-                                    .padding(8)
-                            }
+                userDrawingFallback
+                    .overlay(alignment: .bottom) {
+                        if let error = generationError {
+                            Text(error)
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .padding(8)
+                                .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+                                .padding(8)
                         }
-                }
+                    }
             }
-            .frame(maxWidth: .infinity)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         }
     }
 
@@ -283,8 +224,8 @@ struct ImageRevealView: View {
             log.warning("generateContent: LLM prompt was empty, using fallback: \"\(chapter.imageGenerationPrompt, privacy: .public)\"")
         }
 
-        generationStatus = "Running Image Playground + Core ML..."
-        async let imageWork = generateImages(for: chapter)
+        generationStatus = "Generating image..."
+        async let imageWork = generateImage(for: chapter)
         async let narrationWork = bufferNarration(for: chapter, in: story)
         _ = await imageWork
         _ = await narrationWork
@@ -296,26 +237,25 @@ struct ImageRevealView: View {
         }
     }
 
-    private func generateImages(for chapter: Chapter) async {
-        log.info("generateImages: dispatching comparison")
-        let result = await coordinator.imageService.generateComparisonImages(
-            from: chapter.drawing,
-            prompt: chapter.imageGenerationPrompt
-        )
+    private func generateImage(for chapter: Chapter) async {
+        log.info("generateImage: dispatching")
+        do {
+            let image = try await coordinator.imageService.generateImage(
+                from: chapter.drawing,
+                prompt: chapter.imageGenerationPrompt
+            )
+            chapter.generatedImage = image
+            generatedImage = image
 
-        chapter.playgroundGeneratedImage = result.playgroundImage
-        chapter.coreMLGeneratedImage = result.coreMLImage
-        chapter.generatedImage = result.coreMLImage ?? result.playgroundImage
-        playgroundImage = result.playgroundImage
-        coreMLImage = result.coreMLImage
-        playgroundError = result.playgroundError
-        coreMLError = result.coreMLError
-
-        if chapter.generatedImage != nil {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                imageScale = 1.0
-                imageOpacity = 1.0
+            if image != nil {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                    imageScale = 1.0
+                    imageOpacity = 1.0
+                }
             }
+        } catch {
+            log.error("generateImage: failed — \(error, privacy: .public)")
+            generationError = error.localizedDescription
         }
 
         isGeneratingImage = false
