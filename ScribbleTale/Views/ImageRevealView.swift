@@ -79,6 +79,7 @@ struct ImageRevealView: View {
                             Text(generationStatus)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(.secondary)
+                            coreMLProgressView
                         }
                     }
             } else {
@@ -95,6 +96,23 @@ struct ImageRevealView: View {
                     )
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var coreMLProgressView: some View {
+        let step = coordinator.imageService.coreMLStep
+        let total = coordinator.imageService.coreMLTotalSteps
+        if total > 0 {
+            VStack(spacing: 4) {
+                ProgressView(value: Double(step), total: Double(total))
+                    .tint(coordinator.story?.storyType.color ?? .purple)
+                    .frame(width: 200)
+                Text("Core ML step \(step)/\(total)")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 4)
         }
     }
 
@@ -197,7 +215,7 @@ struct ImageRevealView: View {
             print("Image prompt generation failed: \(error)")
         }
 
-        generationStatus = "Running Image Playground, then Core ML..."
+        generationStatus = "Running Image Playground + Core ML..."
         let result = await coordinator.imageService.generateComparisonImages(
             from: chapter.drawing,
             prompt: chapter.imageGenerationPrompt

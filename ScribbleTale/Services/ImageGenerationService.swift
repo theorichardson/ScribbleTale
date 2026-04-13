@@ -17,6 +17,8 @@ final class ImageGenerationService {
     private(set) var isPlaygroundAvailable = false
     private(set) var isCoreMLAvailable = false
     private(set) var coreMLStatusMessage: String?
+    private(set) var coreMLStep = 0
+    private(set) var coreMLTotalSteps = 0
     var isAvailable: Bool { isPlaygroundAvailable || isCoreMLAvailable }
 
     private var creator: ImageCreator?
@@ -32,41 +34,20 @@ final class ImageGenerationService {
 
     func generateComparisonImages(from drawing: PKDrawing, prompt: String) async -> ImageComparisonResult {
         isGenerating = true
+        coreMLStep = 0
+        coreMLTotalSteps = 0
         defer { isGenerating = false }
 
-        var playgroundImage: CGImage?
-        var coreMLImage: CGImage?
-        var playgroundError: String?
-        var coreMLError: String?
+        async let playgroundResult = runPlayground(from: drawing, prompt: prompt)
+        async let coreMLResult = runCoreML(prompt: prompt)
 
-        if isPlaygroundAvailable {
-            do {
-                playgroundImage = try await generateImagePlaygroundImage(from: drawing, prompt: prompt)
-            } catch {
-                playgroundError = error.localizedDescription
-            }
-        } else {
-            playgroundError = ImageGenerationError.playgroundNotAvailable.errorDescription
-        }
-
-        if isCoreMLAvailable {
-            do {
-                coreMLImage = try coreMLService.generateImage(
-                    prompt: prompt,
-                    negativePrompt: "deformed, extra limbs, blurry, low quality"
-                )
-            } catch {
-                coreMLError = error.localizedDescription
-            }
-        } else {
-            coreMLError = coreMLStatusMessage ?? ImageGenerationError.coreMLNotAvailable.errorDescription
-        }
+        let (pg, cml) = await (playgroundResult, coreMLResult)
 
         return ImageComparisonResult(
-            playgroundImage: playgroundImage,
-            coreMLImage: coreMLImage,
-            playgroundError: playgroundError,
-            coreMLError: coreMLError
+            playgroundImage: pg.image,
+            coreMLImage: cml.image,
+            playgroundError: pg.error,
+            coreMLError: cml.error
         )
     }
 
@@ -81,6 +62,8 @@ final class ImageGenerationService {
         throw ImageGenerationError.generationFailed
     }
 
+    // MARK: - Image Playground
+
     private func checkImagePlaygroundAvailability() async {
         do {
             let c = try await ImageCreator()
@@ -92,21 +75,51 @@ final class ImageGenerationService {
         }
     }
 
-    private func generateImagePlaygroundImage(from drawing: PKDrawing, prompt: String) async throws -> CGImage? {
-        guard let creator, let style else {
-            throw ImageGenerationError.playgroundNotAvailable
+    private func runPlayground(from drawing: PKDrawing, prompt: String) async -> (image: CGImage?, error: String?) {
+        guard isPlaygroundAvailable, let creator, let style else {
+            return (nil, isPlaygroundAvailable
+                ? ImageGenerationError.generationFailed.errorDescription
+                : ImageGenerationError.playgroundNotAvailable.errorDescription)
         }
 
-        let concepts: [ImagePlaygroundConcept] = [
-            .drawing(drawing),
-            .text(prompt)
-        ]
+        do {
+            let concepts: [ImagePlaygroundConcept] = [
+                .drawing(drawing),
+                .text(prompt)
+            ]
+            for try await result in creator.images(for: concepts, style: style, limit: 1) {
+                return (result.cgImage, nil)
+            }
+            return (nil, ImageGenerationError.generationFailed.errorDescription)
+        } catch {
+            return (nil, error.localizedDescription)
+        }
+    }
 
-        for try await result in creator.images(for: concepts, style: style, limit: 1) {
-            return result.cgImage
+    // MARK: - Core ML Stable Diffusion
+
+    private func runCoreML(prompt: String) async -> (image: CGImage?, error: String?) {
+        guard isCoreMLAvailable else {
+            return (nil, coreMLStatusMessage ?? ImageGenerationError.coreMLNotAvailable.errorDescription)
         }
 
-        return nil
+        let service = coreMLService
+        do {
+            let image = try await Task.detached(priority: .userInitiated) {
+                try service.generateImage(
+                    prompt: prompt,
+                    negativePrompt: "deformed, extra limbs, blurry, low quality"
+                ) { [weak self] progress in
+                    Task { @MainActor in
+                        self?.coreMLStep = progress.step
+                        self?.coreMLTotalSteps = progress.totalSteps
+                    }
+                }
+            }.value
+            return (image, nil)
+        } catch {
+            return (nil, error.localizedDescription)
+        }
     }
 }
 
