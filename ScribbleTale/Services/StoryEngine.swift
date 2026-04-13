@@ -54,17 +54,13 @@ final class StoryEngine {
     func generateIntroduction(for storyType: StoryType) -> AsyncThrowingStream<String, Error> {
         log.info("generateIntroduction: storyType=\(storyType.rawValue, privacy: .public)")
         let prompt = """
-        Write a ONE-sentence hook (under 15 words) for a \(storyType.rawValue) story. \
-        Set the scene with a concrete place and a hint of what's about to happen. \
-        End on a cliffhanger or unfinished moment — the sentence should feel like the story \
-        is about to begin but the hero hasn't appeared yet. \
-        The reader will draw the main character next, so leave room for that. \
-        Do NOT name or describe any character. Focus only on the setting and a sense of suspense. \
-        Only output the single sentence, nothing else.
+        Write ONE sentence (under 15 words) to open a \(storyType.rawValue) story. \
+        Describe only the setting — no characters. End with suspense.
         """
         return streamText(
             systemPrompt: storySystemPrompt(for: storyType),
-            userPrompt: prompt
+            userPrompt: prompt,
+            maxTokens: 40
         )
     }
 
@@ -80,18 +76,16 @@ final class StoryEngine {
         contextParts += previousChapters.compactMap { $0.narration.isEmpty ? nil : $0.narration }
         let context = contextParts.joined(separator: " ")
 
-        let prompt = """
-        \(chapter.drawingSubject.drawingPromptHint) \
-        This is part of a \(storyType.rawValue) story.\
-        \(context.isEmpty ? "" : " Story so far: \(context)") \
-        Reply with ONLY a "Draw a …" sentence (5-10 words). ONE simple subject to draw. \
-        Do NOT include any preamble, label, explanation, or extra sentences. \
-        Your entire reply must be just: Draw a <thing>
-        """
+        let prompt: String
+        if context.isEmpty {
+            prompt = "\(chapter.drawingSubject.drawingPromptHint) Reply with ONLY: Draw a <thing>"
+        } else {
+            prompt = "Story so far: \(context)\n\n\(chapter.drawingSubject.drawingPromptHint) Reply with ONLY: Draw a <thing>"
+        }
         return streamText(
             systemPrompt: storySystemPrompt(for: storyType),
             userPrompt: prompt,
-            maxTokens: 30
+            maxTokens: 20
         )
     }
 
@@ -108,39 +102,35 @@ final class StoryEngine {
         let context = contextParts.joined(separator: " ")
 
         let beatGuide: String = switch chapter.beat {
-        case .character: "Introduce the main character — give them a name and one clear personality trait."
-        case .companion: "Introduce the character's companion or pet — describe how they met or what makes this companion special."
-        case .setting: "Describe where the character is — a specific, real-feeling place with one memorable detail."
-        case .object: "Introduce a special object, tool, or item that the character discovers or receives."
-        case .villain: "Introduce the antagonist or obstacle — who or what is causing trouble and why."
-        case .climax: "The character and their allies try something brave or clever to overcome the challenge."
-        case .resolution: "The problem is solved and the character learns or grows from the experience."
+        case .character: "Name the hero and give them one trait."
+        case .companion: "Introduce a companion or pet."
+        case .setting: "Describe the place with one vivid detail."
+        case .object: "The hero finds a special object or tool."
+        case .villain: "Introduce who or what is causing trouble."
+        case .climax: "The hero tries something brave to fix the problem."
+        case .resolution: "The problem is solved and the hero has grown."
         }
 
-        let prompt = """
-        Continue this \(storyType.rawValue) story (1-2 short sentences only). \
-        Chapter \(chapter.index + 1) of \(Story.chapterCount) — \(chapter.beat.rawValue). \(beatGuide) \
-        \(context.isEmpty ? "" : "Story so far: \(context) ") \
-        The child's drawing prompt was: "\(chapter.drawingPrompt)". \
-        Do NOT describe what the drawing looks like or write an image caption. \
-        Write ONLY the next story event — what happens, what someone says, or what changes. \
-        Stay consistent with the story so far. Use plain, concrete language. \
-        Only output the story text, nothing else.
-        """
+        let prompt: String
+        if context.isEmpty {
+            prompt = "\(beatGuide) Write 1-2 sentences."
+        } else {
+            prompt = "Story so far: \(context)\n\n\(beatGuide) Write 1-2 sentences continuing the story."
+        }
         return streamText(
             systemPrompt: storySystemPrompt(for: storyType),
-            userPrompt: prompt
+            userPrompt: prompt,
+            maxTokens: 60
         )
     }
 
     // MARK: - Output Cleaning
 
-    /// Strips conversational preamble that small LLMs frequently emit despite
-    /// instructions to output only the requested content.
+    /// Strips conversational preamble and leaked instructions that small LLMs
+    /// frequently emit despite being told to output only story content.
     static func cleanGeneratedText(_ text: String) -> String {
         var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Unwrap markdown bold/italic — keep the text inside
         result = result.replacingOccurrences(
             of: #"\*{1,3}([^*]+)\*{1,3}"#,
             with: "$1",
@@ -148,7 +138,7 @@ final class StoryEngine {
         )
 
         let preamblePatterns: [String] = [
-            #"^(?:okay|ok|sure|alright|great|absolutely)[,!.]?\s*"#,
+            #"^(?:okay|ok|sure|alright|great|absolutely|here)[,!.]?\s*"#,
             #"^here(?:['''\u{2018}\u{2019}]s| is| are)\s+.*?:\s*"#,
             #"^(?:the )?(?:continuation|next part|story continues|story so far).*?:\s*"#,
             #"^chapter\s+\d+\s*(?:of\s+\d+)?[:\s—–-]*"#,
@@ -171,23 +161,46 @@ final class StoryEngine {
         return result
     }
 
-    /// Cleans narration output, dropping a leading sentence if it echoes
-    /// the drawing prompt rather than advancing the story.
+    /// Markers that indicate a sentence is leaked instructions, not story content.
+    private static let instructionMarkers = [
+        "do not", "don't", "write only", "write a", "caption",
+        "describe what", "image prompt", "story so far",
+        "picture book", "kids aged", "children's storyteller",
+        "draw a", "drawing prompt", "meta-text",
+        "1-2 sentences", "short sentences", "continue the story",
+        "next story event", "plain, concrete",
+    ]
+
+    /// Returns true if a sentence looks like a leaked instruction rather than story text.
+    private static func isLeakedInstruction(_ sentence: String) -> Bool {
+        let lower = sentence.lowercased()
+        return instructionMarkers.contains { lower.contains($0) }
+    }
+
+    /// Cleans narration by removing any sentences that are leaked instructions
+    /// or echoed prompts rather than actual story content.
     static func cleanNarration(_ text: String, drawingPrompt: String) -> String {
         let base = cleanGeneratedText(text)
-
         let sentences = base.splitSentences()
-        guard sentences.count > 1 else { return base }
 
-        let first = sentences[0].lowercased()
-        let prompt = drawingPrompt.lowercased()
-        let similarity = first.commonWordRatio(with: prompt)
-        if similarity > 0.4 {
-            return sentences.dropFirst().joined(separator: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+        let storySentences = sentences.filter { sentence in
+            !isLeakedInstruction(sentence)
         }
 
-        return base
+        let result = storySentences.prefix(2).joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if result.isEmpty {
+            log.warning("cleanNarration: all sentences were instructions, returning first sentence as fallback")
+            return sentences.first ?? base
+        }
+
+        if storySentences.count < sentences.count {
+            let dropped = sentences.count - storySentences.count
+            log.info("cleanNarration: dropped \(dropped) leaked instruction sentence(s)")
+        }
+
+        return result
     }
 
     /// Cleans a drawing prompt, keeping only the "Draw a ..." sentence.
@@ -214,16 +227,7 @@ final class StoryEngine {
     // MARK: - Private
 
     private func storySystemPrompt(for storyType: StoryType) -> String {
-        """
-        You are a children's storyteller writing a \(storyType.rawValue) story for kids aged 6-10. \
-        Write like a real picture book — grounded, clear, and easy to follow. \
-        Every sentence must connect logically to what came before. \
-        Use concrete details (names, places, colors, actions) instead of vague or abstract language. \
-        Do NOT be random, silly, or nonsensical. Avoid made-up words, bizarre events, or surreal logic. \
-        The story should feel like something a child could imagine happening — unique but believable within the genre. \
-        Keep responses very short — no more than two sentences. \
-        Never include meta-text, instructions, or markdown formatting.
-        """
+        "You are a storyteller writing a short \(storyType.rawValue) picture book for kids. Use simple, concrete language. Keep every response to 1-2 sentences maximum."
     }
 
     private static let controlTokenPattern = /(<end_of_turn>|<start_of_turn>|<eos>|<bos>|<pad>)/

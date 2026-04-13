@@ -265,10 +265,12 @@ struct ImageRevealView: View {
             ) {
                 narration += token
             }
+            log.info("bufferNarration: raw = \"\(narration, privacy: .public)\"")
             let cleaned = StoryEngine.cleanNarration(
                 narration,
                 drawingPrompt: chapter.drawingPrompt
             )
+            log.info("bufferNarration: cleaned = \"\(cleaned, privacy: .public)\"")
             bufferedNarration = cleaned
             chapter.narration = cleaned
         } catch {
