@@ -87,23 +87,27 @@ struct IntroductionView: View {
             prompt += token
             introText = prompt
         }
-        story.introText = prompt
-
-        for chapter in story.chapters {
-            var drawPrompt = ""
-            for await token in coordinator.storyEngine.generateDrawingPrompt(
-                for: chapter,
-                storyType: story.storyType,
-                previousChapters: Array(story.chapters.prefix(chapter.index))
-            ) {
-                drawPrompt += token
-            }
-            chapter.drawingPrompt = drawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        story.introText = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        introText = story.introText
 
         withAnimation(.easeOut(duration: 0.5)) {
             isReady = true
             showButton = true
         }
+
+        await generateFirstDrawingPrompt(for: story)
+    }
+
+    private func generateFirstDrawingPrompt(for story: Story) async {
+        guard let firstChapter = story.chapters.first else { return }
+        var drawPrompt = ""
+        for await token in coordinator.storyEngine.generateDrawingPrompt(
+            for: firstChapter,
+            storyType: story.storyType,
+            previousChapters: []
+        ) {
+            drawPrompt += token
+        }
+        firstChapter.drawingPrompt = drawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

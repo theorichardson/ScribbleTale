@@ -59,30 +59,21 @@ struct DrawingToolbar: View {
                     .background(isEraser ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            Spacer()
-
-            HStack(spacing: 8) {
-                Image(systemName: "line.diagonal")
-                    .font(.caption2)
-                Slider(value: $lineWidth, in: 2...20, step: 1)
-                    .frame(maxWidth: 120)
-                Image(systemName: "line.diagonal")
-                    .font(.title3)
-            }
-            .foregroundStyle(.secondary)
-
-            Spacer()
+            Slider(value: $lineWidth, in: 2...20, step: 1)
+                .tint(.secondary)
 
             HStack(spacing: 8) {
                 Button(action: onUndo) {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.title2)
+                        .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                 }
 
                 Button(action: onRedo) {
                     Image(systemName: "arrow.uturn.forward")
                         .font(.title2)
+                        .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                 }
 

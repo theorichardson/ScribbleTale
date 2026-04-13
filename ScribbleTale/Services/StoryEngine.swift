@@ -98,6 +98,8 @@ final class StoryEngine {
         """
     }
 
+    private static let controlTokenPattern = /(<end_of_turn>|<start_of_turn>|<eos>|<bos>|<pad>)/
+
     private func streamGeneration(systemPrompt: String, userPrompt: String) -> AsyncStream<String> {
         AsyncStream { continuation in
             Task {
@@ -113,11 +115,20 @@ final class StoryEngine {
                         ["role": "system", "content": systemPrompt],
                         ["role": "user", "content": userPrompt]
                     ]
+                    var hitStop = false
                     let result = try await llm.generate(
                         messages: messages,
                         maxTokens: 256
                     ) { token in
-                        continuation.yield(token)
+                        guard !hitStop else { return }
+                        if token.contains("<end_of_turn>") || token.contains("<eos>") {
+                            let cleaned = token.replacing(Self.controlTokenPattern, with: "")
+                            if !cleaned.isEmpty { continuation.yield(cleaned) }
+                            hitStop = true
+                            return
+                        }
+                        let cleaned = token.replacing(Self.controlTokenPattern, with: "")
+                        if !cleaned.isEmpty { continuation.yield(cleaned) }
                     }
                     _ = result
                     continuation.finish()
