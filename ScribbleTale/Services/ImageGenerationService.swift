@@ -164,7 +164,10 @@ final class ImageGenerationService {
             && bounds.width >= 20
             && bounds.height >= 20
 
-        log.info("generateImage: prompt=\(sanitizedPrompt, privacy: .public), style=\(String(describing: style), privacy: .public), drawingUsable=\(drawingUsable) (strokes=\(strokeCount))")
+        if sanitizedPrompt != prompt {
+            log.info("generateImage: depersonalized \"\(prompt, privacy: .public)\" → \"\(sanitizedPrompt, privacy: .public)\"")
+        }
+        log.info("generateImage: finalPrompt=\(sanitizedPrompt, privacy: .public), style=\(String(describing: style), privacy: .public), drawingUsable=\(drawingUsable) (strokes=\(strokeCount))")
 
         if let image = try await attemptGeneration(
             creator: creator, style: style, prompt: sanitizedPrompt,

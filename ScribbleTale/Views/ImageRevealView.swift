@@ -195,8 +195,10 @@ struct ImageRevealView: View {
             return
         }
 
-        // Build image prompt directly from drawing prompt -- no LLM rewrite
-        chapter.imageGenerationPrompt = "\(chapter.drawingSubject.pipelineContext) \(chapter.drawingPrompt)."
+        // Use the drawing prompt directly -- pipelineContext contains words like
+        // "child" and "hero" that get mangled by depersonalization into "rabbit"
+        // and "brave lion", misleading Image Playground.
+        chapter.imageGenerationPrompt = chapter.drawingPrompt
 
         log.info("""
             generateContent: chapter \(self.chapterIndex)
