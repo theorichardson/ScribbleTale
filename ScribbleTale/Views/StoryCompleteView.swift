@@ -1,4 +1,20 @@
 import SwiftUI
+import PencilKit
+
+private extension PKDrawing {
+    func renderedImage(scale: CGFloat) -> UIImage {
+        let b = bounds
+        guard !b.isNull, !b.isEmpty else { return UIImage() }
+        let padded = b.insetBy(dx: -20, dy: -20)
+        let raw = image(from: padded, scale: scale)
+        let renderer = UIGraphicsImageRenderer(size: raw.size)
+        return renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: raw.size))
+            raw.draw(at: .zero)
+        }
+    }
+}
 
 struct StoryCompleteView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
@@ -61,7 +77,7 @@ struct StoryCompleteView: View {
         VStack(spacing: 28) {
             if !story.introText.isEmpty {
                 Text(story.introText)
-                    .font(.system(.body, design: .serif))
+                    .font(.system(.title3, design: .serif))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
@@ -86,6 +102,9 @@ struct StoryCompleteView: View {
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
+                Label(chapter.drawingSubject.displayName, systemImage: chapter.drawingSubject.icon)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
             }
 
             if let cgImage = chapter.generatedImage {
@@ -95,11 +114,7 @@ struct StoryCompleteView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
             } else if chapter.hasDrawing {
-                let img = chapter.drawing.image(
-                    from: chapter.drawing.bounds,
-                    scale: UIScreen.main.scale
-                )
-                Image(uiImage: img)
+                Image(uiImage: chapter.drawing.renderedImage(scale: UIScreen.main.scale))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -107,7 +122,7 @@ struct StoryCompleteView: View {
 
             if !chapter.narration.isEmpty {
                 Text(chapter.narration)
-                    .font(.system(.body, design: .serif))
+                    .font(.system(.title3, design: .serif))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -122,7 +137,7 @@ struct StoryCompleteView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "house.fill")
-                Text("New Story")
+                Text("New story")
             }
             .font(.system(.title3, design: .rounded, weight: .bold))
             .foregroundStyle(.white)

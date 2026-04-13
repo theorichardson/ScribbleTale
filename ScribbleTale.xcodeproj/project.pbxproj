@@ -14,6 +14,7 @@
 		459C077B0317AD3E66F5B324 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 9CB6DA3920362ACD10599CB4 /* MLXLLM */; };
 		677F38EC40ABEED4078D5B5A /* ImageRevealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C793A70A9B2894B78367A6ED /* ImageRevealView.swift */; };
 		7E302ACCBA8B19E95EEAABA5 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461EDA8374AFCB7E7EECA26D /* Chapter.swift */; };
+		94AD2F7683AE28C60D882C57 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 22BA5A2A733F3CA82FAFFA61 /* Assets.xcassets */; };
 		A9FD6DB1FF28BE34E334DE7B /* StoryFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42C4BB383788C35FBDFF0DA /* StoryFlowCoordinator.swift */; };
 		B1532DE2190DFE57F88A675D /* StoryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C288349DA8D41A808A310EA /* StoryEngine.swift */; };
 		B4396018116B912B809081E7 /* ImageGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A040FEFBA8BA446AF7F04A88 /* ImageGenerationService.swift */; };
@@ -29,6 +30,7 @@
 
 /* Begin PBXFileReference section */
 		15B9D2AAF93C21CD10237798 /* StoryCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCompleteView.swift; sourceTree = "<group>"; };
+		22BA5A2A733F3CA82FAFFA61 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2E0D14129B6FE7EAA116365D /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingCanvas.swift; sourceTree = "<group>"; };
 		305823839BD91DA5077082CD /* TypewriterText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypewriterText.swift; sourceTree = "<group>"; };
 		30F60A02A38774EF1722CAA6 /* IntroductionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroductionView.swift; sourceTree = "<group>"; };
@@ -44,8 +46,10 @@
 		B42C4BB383788C35FBDFF0DA /* StoryFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryFlowCoordinator.swift; sourceTree = "<group>"; };
 		B66DBBA1AD1ACA5FCFBFC92C /* StoryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryType.swift; sourceTree = "<group>"; };
 		C793A70A9B2894B78367A6ED /* ImageRevealView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRevealView.swift; sourceTree = "<group>"; };
+		CB2789C8754B616F7A17EF8C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D9B36123AF1736B42CA634B3 /* ScribbleTale.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScribbleTale.entitlements; sourceTree = "<group>"; };
 		EC927427CDC671CCB17E4F86 /* StoryTypeSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTypeSelectionView.swift; sourceTree = "<group>"; };
+		EE9DC20D1CAE65DA75919122 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +68,7 @@
 		0112BFC46601044173ECB434 = {
 			isa = PBXGroup;
 			children = (
+				93BD739A44E038AF0103A5D2 /* Preview Content */,
 				60D5506738838446DFD3D85F /* ScribbleTale */,
 				2FA080CFC0F6BA999D9AC67D /* Products */,
 			);
@@ -99,15 +104,26 @@
 		60D5506738838446DFD3D85F /* ScribbleTale */ = {
 			isa = PBXGroup;
 			children = (
+				CB2789C8754B616F7A17EF8C /* Info.plist */,
 				D9B36123AF1736B42CA634B3 /* ScribbleTale.entitlements */,
 				3BD115533B35243726BFAD78 /* ScribbleTaleApp.swift */,
 				D34AE87273F5E9C3E3FD8E53 /* Components */,
 				217C0C74357A7DFAF88338E0 /* Models */,
 				D315A591323234EF3A17AC80 /* Navigation */,
+				E2A049A324CECBAFF183A293 /* Resources */,
 				1F67E44D1E91A77D818BCBF2 /* Services */,
 				9FC5FC8B48C68986674B6CC6 /* Views */,
 			);
 			path = ScribbleTale;
+			sourceTree = "<group>";
+		};
+		93BD739A44E038AF0103A5D2 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				EE9DC20D1CAE65DA75919122 /* Preview Assets.xcassets */,
+			);
+			name = "Preview Content";
+			path = "ScribbleTale/Preview Content";
 			sourceTree = "<group>";
 		};
 		9FC5FC8B48C68986674B6CC6 /* Views */ = {
@@ -141,9 +157,10 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
-		"TEMP_46CDA328-475F-4A45-B527-9396069BBBFC" /* Resources */ = {
+		E2A049A324CECBAFF183A293 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				22BA5A2A733F3CA82FAFFA61 /* Assets.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -156,6 +173,7 @@
 			buildConfigurationList = 2DFD2C7681B949339A95EB6F /* Build configuration list for PBXNativeTarget "ScribbleTale" */;
 			buildPhases = (
 				785FDF75B0BD5419EAF2CA61 /* Sources */,
+				D39842D304C4AD1155AA694F /* Resources */,
 				C6C83700E7E3C15A6BF5FE4A /* Frameworks */,
 			);
 			buildRules = (
@@ -180,6 +198,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
+					AB65CD88BB30CF14EAAC2759 = {
+						DevelopmentTeam = YW3FCY33TJ;
+					};
 				};
 			};
 			buildConfigurationList = 98F3F658937E55792A1E57D6 /* Build configuration list for PBXProject "ScribbleTale" */;
@@ -203,6 +224,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D39842D304C4AD1155AA694F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94AD2F7683AE28C60D882C57 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		785FDF75B0BD5419EAF2CA61 /* Sources */ = {
@@ -294,9 +326,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ScribbleTale/ScribbleTale.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"ScribbleTale/Preview Content\"";
+				DEVELOPMENT_TEAM = YW3FCY33TJ;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScribbleTale/Info.plist;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -386,9 +422,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ScribbleTale/ScribbleTale.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"ScribbleTale/Preview Content\"";
+				DEVELOPMENT_TEAM = YW3FCY33TJ;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScribbleTale/Info.plist;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

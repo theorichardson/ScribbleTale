@@ -4,6 +4,9 @@ import PencilKit
 struct DrawingView: View {
     let chapterIndex: Int
 
+    /// Slightly larger than the previous canvas ↔ toolbar gap (~8pt) for consistent section rhythm.
+    private let sectionSpacing: CGFloat = 14
+
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @State private var hasDrawn = false
     @State private var selectedColor: Color = .black
@@ -18,16 +21,18 @@ struct DrawingView: View {
     var body: some View {
         VStack(spacing: 0) {
             chapterProgressBar
-            promptBanner
-            canvas
-            toolbar
-            letsGoButton
+            VStack(spacing: sectionSpacing) {
+                promptBanner
+                canvas
+                toolbar
+                letsGoButton
+            }
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Chapter \(chapterIndex + 1) of 5")
+                Text("Chapter \(chapterIndex + 1) of \(Story.chapterCount)")
                     .font(.system(.headline, design: .rounded))
             }
         }
@@ -53,16 +58,19 @@ struct DrawingView: View {
     }
 
     private var promptBanner: some View {
-        Text(chapter?.drawingPrompt ?? "Draw something!")
-            .font(.system(.title2, design: .rounded, weight: .bold))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity)
-            .background(
-                (coordinator.story?.storyType.color ?? .purple).opacity(0.1),
-                in: RoundedRectangle(cornerRadius: 0)
-            )
+        VStack(spacing: 6) {
+            if let subject = chapter?.drawingSubject {
+                Label(subject.displayName, systemImage: subject.icon)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
+            }
+            Text(chapter?.drawingPrompt ?? "Draw something!")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
     }
 
     private var canvas: some View {
@@ -77,13 +85,13 @@ struct DrawingView: View {
                     set: { chapter?.drawing = $0 }
                 ),
                 hasDrawn: $hasDrawn,
+                canvasUndoManager: $undoManager,
                 tool: tool,
                 backgroundColor: .white
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
         }
     }
 
@@ -104,14 +112,13 @@ struct DrawingView: View {
             }
         )
         .padding(.horizontal, 12)
-        .padding(.bottom, 4)
     }
 
     private var letsGoButton: some View {
         Button {
             coordinator.goToImageReveal(chapterIndex: chapterIndex)
         } label: {
-            Text("Let's Go!")
+            Text("Let's go!")
                 .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)

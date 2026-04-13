@@ -22,7 +22,7 @@ struct TypewriterText: View {
 
 struct StreamingText: View {
     let text: String
-    var font: Font = .system(.title3, design: .serif)
+    var font: Font = .system(.title2, design: .serif)
     var color: Color = .primary
 
     var body: some View {
@@ -30,6 +30,5 @@ struct StreamingText: View {
             .font(font)
             .foregroundStyle(color)
             .multilineTextAlignment(.center)
-            .animation(.easeIn(duration: 0.1), value: text.count)
     }
 }

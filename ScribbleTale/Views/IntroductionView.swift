@@ -62,7 +62,7 @@ struct IntroductionView: View {
 
             StreamingText(
                 text: introText,
-                font: .system(.title3, design: .serif),
+                font: .system(.title2, design: .serif),
                 color: .primary
             )
             .padding(.horizontal, 8)
@@ -73,7 +73,7 @@ struct IntroductionView: View {
         Button {
             coordinator.goToDrawing(chapterIndex: 0)
         } label: {
-            Text("Let's Go!")
+            Text("Draw your hero!")
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -96,19 +96,8 @@ struct IntroductionView: View {
                 prompt += token
                 introText = prompt
             }
-            story.introText = prompt
-
-            for chapter in story.chapters {
-                var drawPrompt = ""
-                for try await token in coordinator.storyEngine.generateDrawingPrompt(
-                    for: chapter,
-                    storyType: story.storyType,
-                    previousChapters: Array(story.chapters.prefix(chapter.index))
-                ) {
-                    drawPrompt += token
-                }
-                chapter.drawingPrompt = drawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+            story.introText = StoryEngine.cleanGeneratedText(prompt)
+            introText = story.introText
         } catch {
             errorMessage = "Oops! The story brain had a hiccup. Try again!"
             print("Generation error: \(error)")
@@ -118,5 +107,27 @@ struct IntroductionView: View {
             isReady = true
             showButton = true
         }
+
+        await generateDrawingPrompts(for: story)
     }
+
+    private func generateDrawingPrompts(for story: Story) async {
+        do {
+            for chapter in story.chapters {
+                var drawPrompt = ""
+                for try await token in coordinator.storyEngine.generateDrawingPrompt(
+                    for: chapter,
+                    storyType: story.storyType,
+                    previousChapters: Array(story.chapters.prefix(chapter.index)),
+                    introText: story.introText
+                ) {
+                    drawPrompt += token
+                }
+                chapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
+            }
+        } catch {
+            print("Drawing prompt generation error: \(error)")
+        }
+    }
+
 }
