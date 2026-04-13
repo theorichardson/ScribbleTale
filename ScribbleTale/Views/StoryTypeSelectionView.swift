@@ -17,6 +17,8 @@ struct StoryTypeSelectionView: View {
                 genreGrid
                 if isModelLoading {
                     loadingIndicator
+                } else {
+                    availabilitySummary
                 }
             }
             .padding(20)
@@ -72,7 +74,7 @@ struct StoryTypeSelectionView: View {
         VStack(spacing: 12) {
             ProgressView(value: coordinator.storyEngine.loadingProgress)
                 .tint(.purple)
-            Text("Loading story brain...")
+            Text("Loading story brain and image engines...")
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.secondary)
             Text("First time may take a moment to download the model")
@@ -81,5 +83,42 @@ struct StoryTypeSelectionView: View {
         }
         .padding(.horizontal, 40)
         .padding(.vertical, 8)
+    }
+
+    private var availabilitySummary: some View {
+        VStack(spacing: 6) {
+            availabilityLine(
+                title: "Image Playground",
+                available: coordinator.imageService.isPlaygroundAvailable
+            )
+            availabilityLine(
+                title: "Core ML Stable Diffusion",
+                available: coordinator.imageService.isCoreMLAvailable
+            )
+
+            if let coreMLStatus = coordinator.imageService.coreMLStatusMessage,
+               !coordinator.imageService.isCoreMLAvailable {
+                Text(coreMLStatus)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 6)
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func availabilityLine(title: String, available: Bool) -> some View {
+        HStack {
+            Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(available ? .green : .orange)
+            Text(title)
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
+            Spacer()
+            Text(available ? "Ready" : "Unavailable")
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }

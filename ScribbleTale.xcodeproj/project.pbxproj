@@ -15,6 +15,8 @@
 		677F38EC40ABEED4078D5B5A /* ImageRevealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C793A70A9B2894B78367A6ED /* ImageRevealView.swift */; };
 		7E302ACCBA8B19E95EEAABA5 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461EDA8374AFCB7E7EECA26D /* Chapter.swift */; };
 		94AD2F7683AE28C60D882C57 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 22BA5A2A733F3CA82FAFFA61 /* Assets.xcassets */; };
+		A1D2F44B8C0E4D39A1B2C3D4 /* CoreMLStableDiffusionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D2F44B8C0E4D39A1B2C3D5 /* CoreMLStableDiffusionService.swift */; };
+		A1D2F44B8C0E4D39A1B2C3D6 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = A1D2F44B8C0E4D39A1B2C3D7 /* StableDiffusion */; };
 		A9FD6DB1FF28BE34E334DE7B /* StoryFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42C4BB383788C35FBDFF0DA /* StoryFlowCoordinator.swift */; };
 		B1532DE2190DFE57F88A675D /* StoryEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C288349DA8D41A808A310EA /* StoryEngine.swift */; };
 		B4396018116B912B809081E7 /* ImageGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A040FEFBA8BA446AF7F04A88 /* ImageGenerationService.swift */; };
@@ -39,9 +41,10 @@
 		461EDA8374AFCB7E7EECA26D /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		4C288349DA8D41A808A310EA /* StoryEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryEngine.swift; sourceTree = "<group>"; };
 		790D91EB811D55C1314751E1 /* StoryTypeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTypeCard.swift; sourceTree = "<group>"; };
-		92B57EDA0559ECC49F20AE51 /* ScribbleTale.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ScribbleTale.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		92B57EDA0559ECC49F20AE51 /* ScribbleTale.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScribbleTale.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9861F2C8B3E2DAE4E71E059D /* Story.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Story.swift; sourceTree = "<group>"; };
 		A040FEFBA8BA446AF7F04A88 /* ImageGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenerationService.swift; sourceTree = "<group>"; };
+		A1D2F44B8C0E4D39A1B2C3D5 /* CoreMLStableDiffusionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreMLStableDiffusionService.swift; sourceTree = "<group>"; };
 		B3C0105277431EE692E95CBC /* DrawingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingView.swift; sourceTree = "<group>"; };
 		B42C4BB383788C35FBDFF0DA /* StoryFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryFlowCoordinator.swift; sourceTree = "<group>"; };
 		B66DBBA1AD1ACA5FCFBFC92C /* StoryType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryType.swift; sourceTree = "<group>"; };
@@ -59,6 +62,7 @@
 			files = (
 				459C077B0317AD3E66F5B324 /* MLXLLM in Frameworks */,
 				EEF8162034C23CFF225E46CA /* MLXLMCommon in Frameworks */,
+				A1D2F44B8C0E4D39A1B2C3D6 /* StableDiffusion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +81,7 @@
 		1F67E44D1E91A77D818BCBF2 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A1D2F44B8C0E4D39A1B2C3D5 /* CoreMLStableDiffusionService.swift */,
 				A040FEFBA8BA446AF7F04A88 /* ImageGenerationService.swift */,
 				4C288349DA8D41A808A310EA /* StoryEngine.swift */,
 			);
@@ -184,6 +189,7 @@
 			packageProductDependencies = (
 				9CB6DA3920362ACD10599CB4 /* MLXLLM */,
 				562DB8F13D01DAD1BFA9A74C /* MLXLMCommon */,
+				A1D2F44B8C0E4D39A1B2C3D7 /* StableDiffusion */,
 			);
 			productName = ScribbleTale;
 			productReference = 92B57EDA0559ECC49F20AE51 /* ScribbleTale.app */;
@@ -214,6 +220,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				60D1A529753C24BE1E43F3C0 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				A1D2F44B8C0E4D39A1B2C3D8 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2FA080CFC0F6BA999D9AC67D /* Products */;
@@ -242,6 +249,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7E302ACCBA8B19E95EEAABA5 /* Chapter.swift in Sources */,
+				A1D2F44B8C0E4D39A1B2C3D4 /* CoreMLStableDiffusionService.swift in Sources */,
 				1DC33DD99B6D46EB8230836A /* DrawingCanvas.swift in Sources */,
 				26F72BED3B2EADD74D63520F /* DrawingToolbar.swift in Sources */,
 				3F29662475E20ADDA5E72E46 /* DrawingView.swift in Sources */,
@@ -480,6 +488,14 @@
 				minimumVersion = 2.31.3;
 			};
 		};
+		A1D2F44B8C0E4D39A1B2C3D8 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/ml-stable-diffusion";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -492,6 +508,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 60D1A529753C24BE1E43F3C0 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLLM;
+		};
+		A1D2F44B8C0E4D39A1B2C3D7 /* StableDiffusion */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1D2F44B8C0E4D39A1B2C3D8 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */;
+			productName = StableDiffusion;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

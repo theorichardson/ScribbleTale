@@ -15,6 +15,7 @@ A kids' story drawing game for iOS where players pick a story genre, draw scenes
 - **SwiftUI** (iOS 18.4+)
 - **PencilKit** for finger/pencil drawing
 - **Image Playground (`ImageCreator`)** for on-device image generation from drawings
+- **Core ML Stable Diffusion (`StableDiffusion`)** for local comparison generation
 - **MLX Swift (`mlx-swift-lm`)** for running Gemma 3 1B locally for story narration
 - **Swift 6** with strict concurrency
 
@@ -31,6 +32,23 @@ A kids' story drawing game for iOS where players pick a story genre, draw scenes
 3. Build and run on a supported device
 
 > **Note:** Image Playground requires a physical device with Apple Intelligence. The Simulator does not support it, but the app gracefully falls back to showing the user's original drawing.
+
+## Core ML Stable Diffusion Setup (A/B comparison)
+
+To compare Apple Image Playground vs Core ML Stable Diffusion in each chapter:
+
+1. Convert/download Stable Diffusion Core ML assets using Apple's `ml-stable-diffusion` tools.
+2. Add model resources as a folder named `StableDiffusionResources` (or `StableDiffusion`) containing:
+   - `TextEncoder.mlmodelc`
+   - `Unet.mlmodelc` (or `UnetChunk1.mlmodelc` + `UnetChunk2.mlmodelc`)
+   - `VAEDecoder.mlmodelc`
+   - `vocab.json`
+   - `merges.txt`
+3. Place that folder either:
+   - in the app bundle resources, or
+   - in the app's Application Support directory.
+
+When both engines are available, each chapter's reveal screen generates both images sequentially and shows them side-by-side for direct quality comparison.
 
 ## Architecture
 
