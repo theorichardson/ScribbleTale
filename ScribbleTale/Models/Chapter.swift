@@ -78,6 +78,16 @@ struct StoryBeat: Sendable {
     let narrativeBridge: String
 }
 
+// MARK: - Upfront Story Plan
+
+struct UpfrontStoryPlan: Sendable {
+    struct PlannedBeat: Sendable {
+        let challenge: DrawingChallenge
+        let bridge: String
+    }
+    let beats: [PlannedBeat]
+}
+
 // MARK: - Narrative State
 
 @Observable
@@ -92,6 +102,10 @@ final class NarrativeState: @unchecked Sendable {
     var pendingChallenge: DrawingChallenge?
     var currentGap: String = ""
     let beatPlan: [BeatPlan]
+
+    /// Pre-generated story plan (set when using upfront generation strategy).
+    var upfrontPlan: UpfrontStoryPlan?
+    var isUpfront: Bool { upfrontPlan != nil }
 
     // Per-beat runtime state indexed by beat index
     var drawings: [Int: PKDrawing] = [:]
@@ -108,6 +122,16 @@ final class NarrativeState: @unchecked Sendable {
 
     var currentBeatRole: BeatRole? {
         beatPlan[safe: currentBeatIndex]?.role
+    }
+
+    /// Returns the pre-planned challenge for a given beat index, if upfront plan exists.
+    func plannedChallenge(for beatIndex: Int) -> DrawingChallenge? {
+        upfrontPlan?.beats[safe: beatIndex]?.challenge
+    }
+
+    /// Returns the pre-planned bridge text for a given beat index, if upfront plan exists.
+    func plannedBridge(for beatIndex: Int) -> String? {
+        upfrontPlan?.beats[safe: beatIndex]?.bridge
     }
 
     func drawing(for beatIndex: Int) -> PKDrawing {

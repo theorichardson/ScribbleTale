@@ -1,52 +1,131 @@
 import Foundation
 import os
-import MLXLLM
-import MLXLMCommon
 
 private let log = Logger(subsystem: "com.scribbletale.app", category: "StoryEngine")
 
 @Observable
 @MainActor
 final class StoryEngine {
-    private var modelContainer: ModelContainer?
-    private(set) var isLoaded = false
+    let textProvider: any TextGenerationProvider
     private(set) var isGenerating = false
-    private(set) var loadingProgress: Double = 0
-    private(set) var loadingStatus: String = ""
 
-    private static let modelID = "mlx-community/gemma-3-1b-it-4bit"
+    var isLoaded: Bool { textProvider.isLoaded }
+    var loadingProgress: Double { textProvider.loadingProgress }
+    var loadingStatus: String { textProvider.loadingStatus }
+    var loadedModel: StoryModel? { textProvider.loadedModel }
 
-    func loadModel() async {
-        guard !isLoaded else {
-            log.info("loadModel: already loaded, skipping")
-            return
+    /// Live thinking text from thinking models (e.g. Qwen), streamed as the model reasons.
+    private(set) var thinkingText: String = ""
+
+    init(textProvider: any TextGenerationProvider) {
+        self.textProvider = textProvider
+    }
+
+    func loadModel(_ model: StoryModel) async {
+        await textProvider.load(model)
+    }
+
+    // MARK: - Upfront Full Story Plan
+
+    struct UpfrontPlanResult {
+        var setting: String
+        var protagonist: String
+        var opening: String
+        var beats: [UpfrontStoryPlan.PlannedBeat]
+    }
+
+    func generateFullStoryPlan(for storyType: StoryType, beatCount: Int = 5) -> AsyncThrowingStream<String, Error> {
+        log.info("generateFullStoryPlan: storyType=\(storyType.rawValue, privacy: .public) beats=\(beatCount)")
+
+        var beatFields = ""
+        let roles: [BeatRole] = [.introduce, .complicate, .escalate, .resolve, .epilogue]
+        for i in 0..<beatCount {
+            let role = i < roles.count ? roles[i] : .epilogue
+            beatFields += """
+
+            BEAT_\(i + 1)_SUBJECT: [specific animal, creature, or object to draw, 2-5 words]
+            BEAT_\(i + 1)_ROLE: [one sentence: how it matters in the story]
+            BEAT_\(i + 1)_DRAWING_PROMPT: [child-facing prompt starting with "Draw", under 15 words]
+            BEAT_\(i + 1)_IMAGE_GEN_PROMPT: [detailed visual description, include "children's storybook illustration, warm colors, soft edges"]
+            BEAT_\(i + 1)_BRIDGE: [2-3 sentences continuing the story. Tone: \(role.tonalNote)]
+
+            """
         }
-        log.info("loadModel: starting — model=\(Self.modelID, privacy: .public)")
-        loadingStatus = "Downloading model..."
 
-        do {
-            let config = ModelConfiguration(id: Self.modelID)
-            log.info("loadModel: config created, calling loadContainer")
-            modelContainer = try await LLMModelFactory.shared.loadContainer(
-                configuration: config
-            ) { progress in
-                Task { @MainActor in
-                    self.loadingProgress = progress.fractionCompleted
-                    if progress.fractionCompleted < 1.0 {
-                        let pct = Int(progress.fractionCompleted * 100)
-                        self.loadingStatus = "Downloading model... \(pct)%"
-                    } else {
-                        self.loadingStatus = "Loading model into memory..."
-                    }
-                }
+        let prompt = """
+        Genre: \(storyType.rawValue)
+
+        Write a complete \(beatCount)-beat children's story. All characters must be animals or fantastical creatures — never humans.
+        Each beat centers on something the child will draw. The story should build naturally from one drawing to the next.
+        Keep all text simple and vivid — this is for children ages 6-10.
+
+        Return exactly this structure:
+        SETTING: [one sentence describing where and when]
+        PROTAGONIST: [one sentence: an animal or creature, who they are and what they want]
+        OPENING: [2-3 simple sentences of story. End on a moment of need or mystery.]
+        \(beatFields)
+        """
+
+        return streamText(
+            systemPrompt: """
+            You are a master storyteller writing an interactive storybook for children ages 6-10. \
+            All characters must be animals or fantastical creatures — never humans or people. \
+            Write in simple, vivid sentences. Each beat should naturally lead into the next drawing. \
+            The story arc should go: introduce a gentle start, complicate with a problem, \
+            escalate tension, resolve satisfyingly, then close warmly. \
+            Genre: \(storyType.rawValue).
+            """,
+            userPrompt: prompt,
+            maxTokens: 800,
+            temperature: 0.7,
+            topP: 0.9
+        )
+    }
+
+    static func parseFullStoryPlan(_ text: String, storyType: StoryType, beatCount: Int = 5) -> UpfrontPlanResult {
+        let cleaned = cleanGeneratedText(text)
+
+        let setting = extractField("SETTING", from: cleaned)
+        let protagonist = extractField("PROTAGONIST", from: cleaned)
+        let opening = extractField("OPENING", from: cleaned)
+
+        var beats: [UpfrontStoryPlan.PlannedBeat] = []
+        let roles: [BeatRole] = [.introduce, .complicate, .escalate, .resolve, .epilogue]
+
+        for i in 0..<beatCount {
+            let prefix = "BEAT_\(i + 1)"
+            let subject = extractField("\(prefix)_SUBJECT", from: cleaned)
+            let role = extractField("\(prefix)_ROLE", from: cleaned)
+            let drawingPrompt = extractField("\(prefix)_DRAWING_PROMPT", from: cleaned)
+            let imageGenPrompt = extractField("\(prefix)_IMAGE_GEN_PROMPT", from: cleaned)
+            let bridge = extractField("\(prefix)_BRIDGE", from: cleaned)
+
+            let beatRole = i < roles.count ? roles[i] : .epilogue
+
+            let challenge: DrawingChallenge
+            if !subject.isEmpty && !drawingPrompt.isEmpty {
+                challenge = DrawingChallenge(
+                    subject: subject,
+                    role: role.isEmpty ? "plays an important part in the story" : role,
+                    drawingPrompt: cleanDrawingPrompt(drawingPrompt),
+                    imageGenPrompt: imageGenPrompt.isEmpty
+                        ? "\(subject), children's storybook illustration, warm colors, soft edges"
+                        : imageGenPrompt
+                )
+            } else {
+                challenge = DrawingChallenge.fallbacks[beatRole] ?? DrawingChallenge.fallbacks[.introduce]!
             }
-            isLoaded = true
-            loadingStatus = "Model ready"
-            log.info("loadModel: SUCCESS — model loaded and ready")
-        } catch {
-            loadingStatus = "Model failed to load"
-            log.error("loadModel: FAILED — \(error, privacy: .public)")
+
+            let bridgeText = bridge.isEmpty ? "" : cleanNarration(bridge)
+            beats.append(UpfrontStoryPlan.PlannedBeat(challenge: challenge, bridge: bridgeText))
         }
+
+        return UpfrontPlanResult(
+            setting: setting.isEmpty ? "A mysterious land where animals roam" : setting,
+            protagonist: protagonist.isEmpty ? "A brave little rabbit who dreams of adventure" : protagonist,
+            opening: opening.isEmpty ? cleaned : opening,
+            beats: beats
+        )
     }
 
     // MARK: - Prompt 1: Story Introduction
@@ -350,8 +429,6 @@ final class StoryEngine {
 
     // MARK: - Structured Field Extraction
 
-    /// Extracts the value after a labeled field like "SETTING: some value".
-    /// Handles both "FIELD: value" on its own line and inline among other fields.
     static func extractField(_ label: String, from text: String) -> String {
         let pattern = #"(?:^|\n)\s*"# + NSRegularExpression.escapedPattern(for: label) + #"\s*:\s*(.+?)(?=\n\s*[A-Z_]+\s*:|$)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
@@ -406,9 +483,7 @@ final class StoryEngine {
         """
     }
 
-    // MARK: - Streaming Infrastructure
-
-    private static let controlTokenPattern = /(<end_of_turn>|<start_of_turn>|<eos>|<bos>|<pad>)/
+    // MARK: - Streaming (delegates to provider, routes thinking text)
 
     private func streamText(
         systemPrompt: String,
@@ -417,43 +492,91 @@ final class StoryEngine {
         temperature: Float = 0.6,
         topP: Float = 0.9
     ) -> AsyncThrowingStream<String, Error> {
-        guard let modelContainer else {
-            log.error("streamText: model not loaded, returning empty stream")
-            return AsyncThrowingStream { $0.finish() }
-        }
-
-        let container = modelContainer
-        let params = GenerateParameters(maxTokens: maxTokens, temperature: temperature, topP: topP)
+        let provider = textProvider
+        let isThinking = loadedModel?.isThinkingModel ?? false
+        let effectiveMaxTokens = isThinking ? maxTokens * 3 : maxTokens
         let promptPreview = String(userPrompt.prefix(80))
-        log.info("streamText: starting — maxTokens=\(maxTokens) temp=\(temperature) prompt=\"\(promptPreview, privacy: .public)...\"")
+        log.info("streamText: delegating to provider — maxTokens=\(effectiveMaxTokens) temp=\(temperature) thinking=\(isThinking) prompt=\"\(promptPreview, privacy: .public)...\"")
 
         return AsyncThrowingStream { continuation in
-            Task { @MainActor in
-                self.isGenerating = true
-                defer { self.isGenerating = false }
-
-                let session = ChatSession(
-                    container,
-                    instructions: systemPrompt,
-                    generateParameters: params
-                )
+            Task { @MainActor [weak self] in
+                self?.isGenerating = true
+                self?.thinkingText = ""
+                defer { self?.isGenerating = false }
 
                 var tokenCount = 0
+                var insideThink = false
+                var buffer = ""
+
                 do {
-                    for try await chunk in session.streamResponse(to: userPrompt) {
+                    for try await chunk in provider.generate(
+                        systemPrompt: systemPrompt,
+                        userPrompt: userPrompt,
+                        maxTokens: effectiveMaxTokens,
+                        temperature: temperature,
+                        topP: topP
+                    ) {
                         tokenCount += 1
-                        if chunk.contains("<end_of_turn>") || chunk.contains("<eos>") {
-                            let cleaned = chunk.replacing(Self.controlTokenPattern, with: "")
-                            if !cleaned.isEmpty { continuation.yield(cleaned) }
-                            break
+
+                        guard isThinking else {
+                            continuation.yield(chunk)
+                            continue
                         }
-                        let cleaned = chunk.replacing(Self.controlTokenPattern, with: "")
-                        if !cleaned.isEmpty { continuation.yield(cleaned) }
+
+                        buffer += chunk
+
+                        while true {
+                            if insideThink {
+                                if let closeRange = buffer.range(of: "</think>") {
+                                    let thinkContent = String(buffer[buffer.startIndex..<closeRange.lowerBound])
+                                    if !thinkContent.isEmpty {
+                                        self?.thinkingText += thinkContent
+                                    }
+                                    buffer = String(buffer[closeRange.upperBound...])
+                                    insideThink = false
+                                    log.info("streamText: exited think block after \(tokenCount) tokens")
+                                    continue
+                                } else {
+                                    let tail = "</think>".count
+                                    let safeFlush = max(0, buffer.count - tail)
+                                    if safeFlush > 0 {
+                                        let flushEnd = buffer.index(buffer.startIndex, offsetBy: safeFlush)
+                                        self?.thinkingText += String(buffer[buffer.startIndex..<flushEnd])
+                                        buffer = String(buffer[flushEnd...])
+                                    }
+                                    break
+                                }
+                            } else {
+                                if let openRange = buffer.range(of: "<think>") {
+                                    let before = String(buffer[buffer.startIndex..<openRange.lowerBound])
+                                    if !before.isEmpty { continuation.yield(before) }
+                                    buffer = String(buffer[openRange.upperBound...])
+                                    insideThink = true
+                                    log.info("streamText: entered think block at token \(tokenCount)")
+                                    continue
+                                } else if buffer.contains("<") && !buffer.contains(">") {
+                                    break
+                                } else {
+                                    continuation.yield(buffer)
+                                    buffer = ""
+                                    break
+                                }
+                            }
+                        }
                     }
-                    log.info("streamText: completed — \(tokenCount) tokens")
+
+                    if !buffer.isEmpty && !insideThink {
+                        let stripped = buffer
+                            .replacingOccurrences(of: "<think>", with: "")
+                            .replacingOccurrences(of: "</think>", with: "")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !stripped.isEmpty { continuation.yield(stripped) }
+                    }
+
+                    log.info("streamText: completed — \(tokenCount) chunks")
                     continuation.finish()
                 } catch {
-                    log.error("streamText: error after \(tokenCount) tokens — \(error, privacy: .public)")
+                    log.error("streamText: error after \(tokenCount) chunks — \(error, privacy: .public)")
                     continuation.finish(throwing: error)
                 }
             }

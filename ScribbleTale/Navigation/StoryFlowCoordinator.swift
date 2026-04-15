@@ -6,8 +6,14 @@ final class StoryFlowCoordinator {
     var path = NavigationPath()
     var story: Story?
 
-    let storyEngine = StoryEngine()
-    let imageService = ImageGenerationService()
+    private(set) var storyEngine: StoryEngine
+    private(set) var imageService: ImageGenerationService
+    let config = ProviderConfig.shared
+
+    private var mlxProvider: MLXTextProvider
+    private var openAITextProvider: OpenAITextProvider
+    private var playgroundProvider: PlaygroundImageProvider
+    private var openAIImageProvider: OpenAIImageProvider
 
     enum Destination: Hashable {
         case introduction
@@ -16,7 +22,54 @@ final class StoryFlowCoordinator {
         case storyComplete
     }
 
+    init() {
+        let config = ProviderConfig.shared
+        let mlx = MLXTextProvider()
+        let openAIText = OpenAITextProvider(apiKey: config.openAIKey)
+        let playground = PlaygroundImageProvider()
+        let openAIImage = OpenAIImageProvider(apiKey: config.openAIKey)
+
+        self.mlxProvider = mlx
+        self.openAITextProvider = openAIText
+        self.playgroundProvider = playground
+        self.openAIImageProvider = openAIImage
+
+        self.storyEngine = StoryEngine(textProvider: mlx)
+        self.imageService = ImageGenerationService(
+            imageProvider: playground,
+            needsDepersonalization: true
+        )
+    }
+
+    /// Switch the text provider based on which model is selected.
+    func selectTextModel(_ model: StoryModel) {
+        if model.isLocal {
+            storyEngine = StoryEngine(textProvider: mlxProvider)
+        } else {
+            openAITextProvider.updateAPIKey(config.openAIKey)
+            storyEngine = StoryEngine(textProvider: openAITextProvider)
+        }
+    }
+
+    /// Rebuild the image service based on current config.
+    func refreshImageProvider() {
+        switch config.imageProvider {
+        case .local:
+            imageService = ImageGenerationService(
+                imageProvider: playgroundProvider,
+                needsDepersonalization: true
+            )
+        case .openAI:
+            openAIImageProvider.updateAPIKey(config.openAIKey)
+            imageService = ImageGenerationService(
+                imageProvider: openAIImageProvider,
+                needsDepersonalization: false
+            )
+        }
+    }
+
     func startStory(type: StoryType) {
+        refreshImageProvider()
         story = Story(storyType: type)
         path.append(Destination.introduction)
     }

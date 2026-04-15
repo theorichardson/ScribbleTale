@@ -65,6 +65,7 @@ struct ImageRevealView: View {
                     VStack(spacing: 24) {
                         chapterHeader
                         imageSection
+                        ThinkingTextView(text: coordinator.storyEngine.thinkingText)
                         captionSection
                         bridgeSection
                     }
@@ -237,7 +238,7 @@ struct ImageRevealView: View {
 
         let imagePrompt = challenge.imageGenPrompt
         log.info("""
-            generateContent: beat \(self.chapterIndex)
+            generateContent: beat \(self.chapterIndex) upfront=\(state.isUpfront)
               subject=\(challenge.subject, privacy: .public)
               imagePrompt=\(imagePrompt, privacy: .public)
               strokes=\(self.drawing.strokes.count)
@@ -260,17 +261,24 @@ struct ImageRevealView: View {
         await revealText(caption) { text in captionText = text }
         state.imageCaptions[chapterIndex] = caption
 
-        // Step 3: Narrative bridge
+        // Step 3: Narrative bridge (use pre-planned if upfront, otherwise generate)
         phase = .showingBridge
         let beatPlan = state.beatPlan[chapterIndex]
         let isFinalBeat = beatPlan.role == .resolve || beatPlan.role == .epilogue
-        let bridge = await generateBridge(
-            subject: challenge.subject,
-            role: challenge.role,
-            state: state,
-            storyType: story.storyType,
-            beatPlan: beatPlan
-        )
+        let bridge: String
+
+        if let plannedBridge = state.plannedBridge(for: chapterIndex), !plannedBridge.isEmpty {
+            log.info("generateContent: using pre-planned bridge for beat \(self.chapterIndex)")
+            bridge = plannedBridge
+        } else {
+            bridge = await generateBridge(
+                subject: challenge.subject,
+                role: challenge.role,
+                state: state,
+                storyType: story.storyType,
+                beatPlan: beatPlan
+            )
+        }
         await revealText(bridge) { text in bridgeText = text }
 
         // Step 4: Record completed beat
@@ -282,9 +290,15 @@ struct ImageRevealView: View {
         )
         state.storyBeats.append(completedBeat)
 
-        // Step 5: Generate next challenge if not final
+        // Step 5: Set up next challenge (use pre-planned if upfront, otherwise generate)
         if !isFinalBeat && chapterIndex + 1 < state.beatPlan.count {
-            await generateNextChallenge(state: state, storyType: story.storyType)
+            let nextIndex = chapterIndex + 1
+            if let plannedChallenge = state.plannedChallenge(for: nextIndex) {
+                log.info("generateContent: using pre-planned challenge for beat \(nextIndex)")
+                state.pendingChallenge = plannedChallenge
+            } else {
+                await generateNextChallenge(state: state, storyType: story.storyType)
+            }
         }
 
         phase = .complete

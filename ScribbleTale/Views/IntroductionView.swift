@@ -61,6 +61,8 @@ struct IntroductionView: View {
                     .foregroundStyle(story.storyType.color)
             }
 
+            ThinkingTextView(text: coordinator.storyEngine.thinkingText)
+
             StreamingText(
                 text: displayText,
                 font: .system(.title2, design: .serif),
@@ -91,8 +93,54 @@ struct IntroductionView: View {
     private func generateIntro() async {
         guard let story = coordinator.story else { return }
         let state = story.narrativeState
+        let useUpfront = coordinator.config.generationStrategy == .upfront
 
-        // Step 1: Generate and stream the introduction
+        if useUpfront {
+            await generateUpfront(story: story, state: state)
+        } else {
+            await generateIncremental(story: story, state: state)
+        }
+
+        withAnimation(.easeOut(duration: 0.5)) {
+            isReady = true
+            showButton = true
+        }
+    }
+
+    private func generateUpfront(story: Story, state: NarrativeState) async {
+        var raw = ""
+        do {
+            for try await token in coordinator.storyEngine.generateFullStoryPlan(
+                for: story.storyType,
+                beatCount: story.chapterCount
+            ) {
+                raw += token
+                displayText = raw
+            }
+        } catch {
+            errorMessage = "Oops! The story brain had a hiccup. Try again!"
+            print("Upfront generation error: \(error)")
+            return
+        }
+
+        let plan = StoryEngine.parseFullStoryPlan(raw, storyType: story.storyType, beatCount: story.chapterCount)
+        state.setting = plan.setting
+        state.protagonist = plan.protagonist
+        state.openingText = plan.opening
+        state.upfrontPlan = UpfrontStoryPlan(beats: plan.beats)
+
+        displayText = plan.opening
+
+        if let firstChallenge = plan.beats.first?.challenge {
+            state.pendingChallenge = firstChallenge
+            buttonLabel = "Draw \(firstChallenge.subject)!"
+        } else {
+            state.pendingChallenge = DrawingChallenge.fallbacks[.introduce]
+            buttonLabel = "Let's draw!"
+        }
+    }
+
+    private func generateIncremental(story: Story, state: NarrativeState) async {
         var raw = ""
         do {
             for try await token in coordinator.storyEngine.generateIntroduction(for: story.storyType) {
@@ -105,7 +153,6 @@ struct IntroductionView: View {
             return
         }
 
-        // Step 2: Parse structured fields into NarrativeState
         let result = StoryEngine.parseIntroduction(raw, storyType: story.storyType)
         state.setting = result.setting
         state.protagonist = result.protagonist
@@ -114,7 +161,6 @@ struct IntroductionView: View {
 
         displayText = result.opening
 
-        // Step 3: Generate the first drawing challenge from the GAP
         do {
             var challengeRaw = ""
             for try await token in coordinator.storyEngine.generateDrawingChallenge(
@@ -133,11 +179,6 @@ struct IntroductionView: View {
             let fallbackRole = state.currentBeatRole ?? .introduce
             state.pendingChallenge = DrawingChallenge.fallbacks[fallbackRole]
             buttonLabel = "Let's draw!"
-        }
-
-        withAnimation(.easeOut(duration: 0.5)) {
-            isReady = true
-            showButton = true
         }
     }
 }
