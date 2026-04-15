@@ -12,13 +12,14 @@ struct DrawingView: View {
     @State private var lineWidth: CGFloat = 5
     @State private var isEraser = false
     @State private var undoManager: UndoManager?
+    @State private var snapshotChallenge: DrawingChallenge?
 
-    private var state: NarrativeState? {
-        coordinator.story?.narrativeState
+    private var session: StorySession? {
+        coordinator.story?.session
     }
 
     private var challenge: DrawingChallenge? {
-        state?.pendingChallenge
+        snapshotChallenge ?? session?.pendingChallenge
     }
 
     var body: some View {
@@ -33,6 +34,11 @@ struct DrawingView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarBackButtonHidden(true)
+        .onAppear {
+            if snapshotChallenge == nil {
+                snapshotChallenge = session?.pendingChallenge
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Beat \(chapterIndex + 1) of \(coordinator.story?.chapterCount ?? 5)")
@@ -71,16 +77,16 @@ struct DrawingView: View {
     }
 
     private var canvas: some View {
-        GeometryReader { geo in
+        GeometryReader { _ in
             let tool: PKTool = isEraser
                 ? PKEraserTool(.vector)
                 : PKInkingTool(.pen, color: UIColor(selectedColor), width: lineWidth)
 
             DrawingCanvas(
                 drawing: Binding(
-                    get: { state?.drawing(for: chapterIndex) ?? PKDrawing() },
+                    get: { session?.drawing(for: chapterIndex) ?? PKDrawing() },
                     set: { newDrawing in
-                        state?.setDrawing(newDrawing, for: chapterIndex)
+                        session?.setDrawing(newDrawing, for: chapterIndex)
                     }
                 ),
                 hasDrawn: $hasDrawn,
@@ -106,7 +112,7 @@ struct DrawingView: View {
                 undoManager?.redo()
             },
             onClear: {
-                state?.setDrawing(PKDrawing(), for: chapterIndex)
+                session?.setDrawing(PKDrawing(), for: chapterIndex)
                 hasDrawn = false
             }
         )

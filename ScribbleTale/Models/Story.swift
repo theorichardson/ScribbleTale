@@ -3,17 +3,14 @@ import Foundation
 @Observable
 final class Story: @unchecked Sendable {
     let storyType: StoryType
-    let narrativeState: NarrativeState
+    let session: StorySession
 
-    static let beatCount = 5
+    static let sceneCount = 3
 
-    var chapterCount: Int { narrativeState.beatPlan.count }
+    var chapterCount: Int { session.sceneCount }
 
     init(storyType: StoryType) {
         self.storyType = storyType
-        self.narrativeState = NarrativeState(
-            genre: storyType.rawValue,
-            beatCount: Self.beatCount
-        )
+        self.session = StorySession(storyType: storyType, sceneCount: Self.sceneCount)
     }
 }

@@ -7,8 +7,10 @@ private let log = Logger(subsystem: "com.scribbletale.app", category: "OpenAITex
 @MainActor
 final class OpenAITextProvider: TextGenerationProvider {
     private(set) var isLoaded = false
+    private(set) var isLoadingModel = false
     private(set) var loadingProgress: Double = 0
     private(set) var loadingStatus: String = ""
+    private(set) var loadError: String?
     private(set) var thinkingText: String = ""
     private(set) var loadedModel: StoryModel?
 
@@ -28,13 +30,23 @@ final class OpenAITextProvider: TextGenerationProvider {
         }
     }
 
+    func resetThinkingText() {
+        thinkingText = ""
+    }
+
     func load(_ model: StoryModel) async {
+        isLoadingModel = true
+        loadError = nil
         loadingProgress = 0.5
         loadingStatus = "Validating API key..."
+        log.info("load: starting — model=\(model.displayName, privacy: .public)")
 
         guard !apiKey.isEmpty else {
+            loadError = "OpenAI API key is required. Add it in Settings."
             loadingStatus = "API key required"
             isLoaded = false
+            isLoadingModel = false
+            log.error("load: FAILED — API key is empty")
             return
         }
 
@@ -42,7 +54,8 @@ final class OpenAITextProvider: TextGenerationProvider {
         loadingStatus = "OpenAI ready"
         isLoaded = true
         loadedModel = model
-        log.info("load: OpenAI provider ready with key=\(self.apiKey.prefix(8), privacy: .public)...")
+        isLoadingModel = false
+        log.info("load: SUCCESS — OpenAI provider ready with key=\(self.apiKey.prefix(8), privacy: .public)...")
     }
 
     func generate(

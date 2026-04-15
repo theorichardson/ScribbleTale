@@ -3,8 +3,10 @@ import Foundation
 @MainActor
 protocol TextGenerationProvider: AnyObject {
     var isLoaded: Bool { get }
+    var isLoadingModel: Bool { get }
     var loadingProgress: Double { get }
     var loadingStatus: String { get }
+    var loadError: String? { get }
     var thinkingText: String { get }
     var loadedModel: StoryModel? { get }
 
@@ -16,4 +18,5 @@ protocol TextGenerationProvider: AnyObject {
         temperature: Float,
         topP: Float
     ) -> AsyncThrowingStream<String, Error>
+    func resetThinkingText()
 }

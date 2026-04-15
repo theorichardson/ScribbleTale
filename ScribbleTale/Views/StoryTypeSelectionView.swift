@@ -6,11 +6,14 @@ private let log = Logger(subsystem: "com.scribbletale.app", category: "StoryType
 struct StoryTypeSelectionView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @AppStorage("selectedModel") private var selectedModelRaw = StoryModel.gemma3_1B.rawValue
-    @State private var isModelLoading = false
     @State private var showSettings = false
 
     private var selectedModel: StoryModel {
         StoryModel(rawValue: selectedModelRaw) ?? .gemma3_1B
+    }
+
+    private var isModelLoading: Bool {
+        coordinator.storyEngine.isLoadingModel
     }
 
     private let columns = [
@@ -55,19 +58,21 @@ struct StoryTypeSelectionView: View {
         }
         .task {
             log.info("task: starting model load + availability checks")
-            isModelLoading = true
 
             coordinator.selectTextModel(selectedModel)
             log.info("task: loading LLM — \(selectedModel.displayName)")
             await coordinator.storyEngine.loadModel(selectedModel)
             log.info("task: LLM load finished — isLoaded=\(coordinator.storyEngine.isLoaded)")
 
+            if let error = coordinator.storyEngine.loadError {
+                log.error("task: LLM load error — \(error)")
+            }
+
             log.info("task: checking image provider availability...")
             coordinator.refreshImageProvider()
             await coordinator.imageService.checkAvailability()
             log.info("task: image check done — available=\(coordinator.imageService.isAvailable)")
 
-            isModelLoading = false
             log.info("task: all loading complete")
         }
     }
@@ -123,12 +128,12 @@ struct StoryTypeSelectionView: View {
 
     private func selectModel(_ model: StoryModel) {
         guard model != selectedModel else { return }
+        log.info("selectModel: switching to \(model.displayName)")
         selectedModelRaw = model.rawValue
         coordinator.selectTextModel(model)
         Task {
-            isModelLoading = true
             await coordinator.storyEngine.loadModel(model)
-            isModelLoading = false
+            log.info("selectModel: load complete — isLoaded=\(coordinator.storyEngine.isLoaded)")
         }
     }
 
@@ -150,8 +155,17 @@ struct StoryTypeSelectionView: View {
 
     private var loadingIndicator: some View {
         VStack(spacing: 12) {
-            ProgressView(value: coordinator.storyEngine.loadingProgress)
-                .tint(.purple)
+            let progress = coordinator.storyEngine.loadingProgress
+            let isMemoryPhase = progress >= 1.0 && !coordinator.storyEngine.isLoaded
+
+            if isMemoryPhase {
+                ProgressView()
+                    .controlSize(.regular)
+                    .tint(.purple)
+            } else {
+                ProgressView(value: progress)
+                    .tint(.purple)
+            }
 
             Text(coordinator.storyEngine.loadingStatus.isEmpty
                  ? "Preparing..."
@@ -160,10 +174,15 @@ struct StoryTypeSelectionView: View {
                 .foregroundStyle(.secondary)
                 .animation(.easeInOut(duration: 0.2), value: coordinator.storyEngine.loadingStatus)
 
-            if coordinator.storyEngine.loadingProgress > 0 && coordinator.storyEngine.loadingProgress < 1.0 {
+            if progress > 0 && progress < 1.0 {
                 Text("First time may take a moment to download (\(selectedModel.downloadSize))")
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.tertiary)
+            } else if isMemoryPhase {
+                Text("Loading weights into memory — this can take a while for larger models")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
             } else if coordinator.storyEngine.isLoaded && !coordinator.imageService.isAvailable {
                 Text("Checking Image Playground...")
                     .font(.system(.caption2, design: .rounded))
@@ -180,27 +199,39 @@ struct StoryTypeSelectionView: View {
         VStack(spacing: 6) {
             availabilityLine(
                 title: "Story Engine (\(selectedModel.displayName))",
-                available: coordinator.storyEngine.isLoaded
+                available: coordinator.storyEngine.isLoaded,
+                error: coordinator.storyEngine.loadError
             )
             availabilityLine(
                 title: coordinator.config.imageProvider.displayName,
-                available: coordinator.imageService.isAvailable
+                available: coordinator.imageService.isAvailable,
+                error: coordinator.imageService.unavailableReason
             )
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private func availabilityLine(title: String, available: Bool) -> some View {
-        HStack {
-            Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(available ? .green : .orange)
-            Text(title)
-                .font(.system(.subheadline, design: .rounded, weight: .medium))
-            Spacer()
-            Text(available ? "Ready" : "Unavailable")
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(.secondary)
+    private func availabilityLine(title: String, available: Bool, error: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(available ? .green : .orange)
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                Spacer()
+                Text(available ? "Ready" : "Unavailable")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let error, !available {
+                Text(error)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.red.opacity(0.8))
+                    .lineLimit(3)
+                    .padding(.leading, 28)
+            }
         }
     }
 }

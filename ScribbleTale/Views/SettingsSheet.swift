@@ -12,7 +12,6 @@ struct SettingsSheet: View {
         NavigationStack {
             Form {
                 imageProviderSection
-                generationStrategySection
                 openAISection
                 aboutSection
             }
@@ -57,38 +56,6 @@ struct SettingsSheet: View {
             Text("Image Generation")
         } footer: {
             Text("Image Playground runs on-device. OpenAI requires an API key and uses gpt-image-1.")
-        }
-    }
-
-    // MARK: - Generation Strategy
-
-    private var generationStrategySection: some View {
-        Section {
-            ForEach(GenerationStrategy.allCases) { strategy in
-                Button {
-                    config.generationStrategy = strategy
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(strategy.displayName)
-                                .foregroundStyle(.primary)
-                            Text(strategy.subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if config.generationStrategy == strategy {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.purple)
-                                .fontWeight(.semibold)
-                        }
-                    }
-                }
-            }
-        } header: {
-            Text("Story Generation")
-        } footer: {
-            Text("Upfront generates the full story plan in one call (best with cloud models). Incremental builds the story beat by beat.")
         }
     }
 

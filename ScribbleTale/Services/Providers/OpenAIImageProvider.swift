@@ -11,6 +11,7 @@ private let log = Logger(subsystem: "com.scribbletale.app", category: "OpenAIIma
 final class OpenAIImageProvider: ImageGenerationProvider {
     private(set) var isGenerating = false
     private(set) var isAvailable = false
+    let unavailableReason: String? = nil
 
     private var apiKey: String
     private static let endpoint = URL(string: "https://api.openai.com/v1/images/generations")!

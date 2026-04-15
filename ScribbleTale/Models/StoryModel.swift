@@ -18,7 +18,7 @@ enum StoryModel: String, CaseIterable, Identifiable {
     var modelID: String {
         switch self {
         case .gemma3_1B:         return "mlx-community/gemma-3-1b-it-4bit"
-        case .gemma3_4B:         return "mlx-community/gemma-3-4b-it-4bit"
+        case .gemma3_4B:         return "mlx-community/gemma-3-4b-it-qat-4bit"
         case .qwen3_4B_thinking: return "mlx-community/Qwen3-4B-Thinking-2507-4bit"
         case .openAI_gpt4oMini:  return "gpt-4o-mini"
         }
@@ -62,5 +62,14 @@ enum StoryModel: String, CaseIterable, Identifiable {
 
     var isThinkingModel: Bool {
         self == .qwen3_4B_thinking
+    }
+
+    var modelTier: ModelTier {
+        switch self {
+        case .gemma3_1B:         return .small
+        case .gemma3_4B:         return .medium
+        case .qwen3_4B_thinking: return .medium
+        case .openAI_gpt4oMini:  return .large
+        }
     }
 }

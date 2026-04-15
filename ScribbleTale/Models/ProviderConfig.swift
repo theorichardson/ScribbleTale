@@ -21,27 +21,6 @@ enum ImageProviderType: String, CaseIterable, Identifiable {
     }
 }
 
-enum GenerationStrategy: String, CaseIterable, Identifiable {
-    case incremental
-    case upfront
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .incremental: return "Incremental"
-        case .upfront:     return "Upfront"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .incremental: return "Generate each beat as you go"
-        case .upfront:     return "Plan full story before drawing"
-        }
-    }
-}
-
 @Observable
 @MainActor
 final class ProviderConfig {
@@ -55,16 +34,10 @@ final class ProviderConfig {
         didSet { UserDefaults.standard.set(imageProvider.rawValue, forKey: "imageProvider") }
     }
 
-    var generationStrategy: GenerationStrategy {
-        didSet { UserDefaults.standard.set(generationStrategy.rawValue, forKey: "generationStrategy") }
-    }
-
     private init() {
         self.openAIKey = Self.loadKey()
         let imgRaw = UserDefaults.standard.string(forKey: "imageProvider") ?? ImageProviderType.local.rawValue
         self.imageProvider = ImageProviderType(rawValue: imgRaw) ?? .local
-        let stratRaw = UserDefaults.standard.string(forKey: "generationStrategy") ?? GenerationStrategy.incremental.rawValue
-        self.generationStrategy = GenerationStrategy(rawValue: stratRaw) ?? .incremental
     }
 
     var hasOpenAIKey: Bool { !openAIKey.isEmpty }

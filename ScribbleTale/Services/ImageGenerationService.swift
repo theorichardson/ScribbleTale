@@ -14,6 +14,7 @@ final class ImageGenerationService {
     var isGenerating: Bool { imageProvider.isGenerating }
     var isAvailable: Bool { imageProvider.isAvailable }
     var isPlaygroundAvailable: Bool { imageProvider.isAvailable }
+    var unavailableReason: String? { imageProvider.unavailableReason }
 
     init(imageProvider: any ImageGenerationProvider, needsDepersonalization: Bool = true) {
         self.imageProvider = imageProvider
@@ -51,6 +52,7 @@ final class ImageGenerationService {
         (#"\bevil witch\b"#, "dark raven"),
         (#"\byear.old\b"#, ""),
         (#"\bfamily members?\b"#, "woodland creatures"),
+        (#"\bchildren's\b"#, "whimsical"),
     ]
 
     private static let wordReplacements: [(pattern: String, replacement: String)] = [
@@ -120,6 +122,7 @@ final class ImageGenerationService {
 enum ImageGenerationError: LocalizedError {
     case playgroundNotAvailable
     case generationFailed
+    case unsupportedLanguage
 
     var errorDescription: String? {
         switch self {
@@ -127,6 +130,8 @@ enum ImageGenerationError: LocalizedError {
             "Image Playground is not available on this device. Apple Intelligence is required."
         case .generationFailed:
             "Failed to generate image. Please try again."
+        case .unsupportedLanguage:
+            "Image Playground requires a supported language. Open Settings → Apple Intelligence & Siri and set the language to English (United States), then restart the app."
         }
     }
 }

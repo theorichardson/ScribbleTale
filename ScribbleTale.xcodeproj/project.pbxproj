@@ -36,6 +36,13 @@
 		F3B7AD1FD76A0C8E4156C98E /* StoryTypeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790D91EB811D55C1314751E1 /* StoryTypeCard.swift */; };
 		F50582C44054F3708D842DAA /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B85DE2F691993D58E70862 /* SettingsSheet.swift */; };
 		FE5D6DEE33D799F26266B7B0 /* StoryCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B9D2AAF93C21CD10237798 /* StoryCompleteView.swift */; };
+		AA1111111111111111111111 /* StorySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2222222222222222222222 /* StorySession.swift */; };
+		AA3333333333333333333333 /* MemoryFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4444444444444444444444 /* MemoryFeed.swift */; };
+		AA5555555555555555555555 /* CoherenceGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6666666666666666666666 /* CoherenceGuard.swift */; };
+		AA7777777777777777777777 /* PromptTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8888888888888888888888 /* PromptTemplates.swift */; };
+		AA9999999999999999999999 /* StorySessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA01 /* StorySessionModel.swift */; };
+		AAAAAAAAAAAAAAAAAAAAAA02 /* SceneModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA03 /* SceneModel.swift */; };
+		AAAAAAAAAAAAAAAAAAAAAA04 /* StoryPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA05 /* StoryPersistence.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +77,13 @@
 		EC927427CDC671CCB17E4F86 /* StoryTypeSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTypeSelectionView.swift; sourceTree = "<group>"; };
 		EE9DC20D1CAE65DA75919122 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		F3234F2977147DD354E92F14 /* PlaygroundImageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaygroundImageProvider.swift; sourceTree = "<group>"; };
+		AA2222222222222222222222 /* StorySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorySession.swift; sourceTree = "<group>"; };
+		AA4444444444444444444444 /* MemoryFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryFeed.swift; sourceTree = "<group>"; };
+		AA6666666666666666666666 /* CoherenceGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoherenceGuard.swift; sourceTree = "<group>"; };
+		AA8888888888888888888888 /* PromptTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptTemplates.swift; sourceTree = "<group>"; };
+		AAAAAAAAAAAAAAAAAAAAAA01 /* StorySessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorySessionModel.swift; sourceTree = "<group>"; };
+		AAAAAAAAAAAAAAAAAAAAAA03 /* SceneModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneModel.swift; sourceTree = "<group>"; };
+		AAAAAAAAAAAAAAAAAAAAAA05 /* StoryPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPersistence.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,7 +111,10 @@
 		1F67E44D1E91A77D818BCBF2 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AA6666666666666666666666 /* CoherenceGuard.swift */,
 				A040FEFBA8BA446AF7F04A88 /* ImageGenerationService.swift */,
+				AA4444444444444444444444 /* MemoryFeed.swift */,
+				AA8888888888888888888888 /* PromptTemplates.swift */,
 				4C288349DA8D41A808A310EA /* StoryEngine.swift */,
 				524C006BBCDF3267A123C0E1 /* Providers */,
 			);
@@ -111,6 +128,7 @@
 				956F24FBB847D68EF56E7C15 /* ProviderConfig.swift */,
 				9861F2C8B3E2DAE4E71E059D /* Story.swift */,
 				C4C411033AFD9F4431E5907A /* StoryModel.swift */,
+				AA2222222222222222222222 /* StorySession.swift */,
 				B66DBBA1AD1ACA5FCFBFC92C /* StoryType.swift */,
 			);
 			path = Models;
@@ -146,11 +164,22 @@
 				D34AE87273F5E9C3E3FD8E53 /* Components */,
 				217C0C74357A7DFAF88338E0 /* Models */,
 				D315A591323234EF3A17AC80 /* Navigation */,
+				AAAAAAAAAAAAAAAAAAAAAA10 /* Persistence */,
 				E2A049A324CECBAFF183A293 /* Resources */,
 				1F67E44D1E91A77D818BCBF2 /* Services */,
 				9FC5FC8B48C68986674B6CC6 /* Views */,
 			);
 			path = ScribbleTale;
+			sourceTree = "<group>";
+		};
+		AAAAAAAAAAAAAAAAAAAAAA10 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				AAAAAAAAAAAAAAAAAAAAAA03 /* SceneModel.swift */,
+				AAAAAAAAAAAAAAAAAAAAAA01 /* StorySessionModel.swift */,
+				AAAAAAAAAAAAAAAAAAAAAA05 /* StoryPersistence.swift */,
+			);
+			path = Persistence;
 			sourceTree = "<group>";
 		};
 		93BD739A44E038AF0103A5D2 /* Preview Content */ = {
@@ -305,6 +334,13 @@
 				9DF7E1A1A76815CBA04DEFAA /* TextGenerationProvider.swift in Sources */,
 				A7C4B96DD7358838136BC07E /* ThinkingTextView.swift in Sources */,
 				D69B52C0F83FB3FF7EF11505 /* TypewriterText.swift in Sources */,
+				AA1111111111111111111111 /* StorySession.swift in Sources */,
+				AA3333333333333333333333 /* MemoryFeed.swift in Sources */,
+				AA5555555555555555555555 /* CoherenceGuard.swift in Sources */,
+				AA7777777777777777777777 /* PromptTemplates.swift in Sources */,
+				AA9999999999999999999999 /* StorySessionModel.swift in Sources */,
+				AAAAAAAAAAAAAAAAAAAAAA02 /* SceneModel.swift in Sources */,
+				AAAAAAAAAAAAAAAAAAAAAA04 /* StoryPersistence.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

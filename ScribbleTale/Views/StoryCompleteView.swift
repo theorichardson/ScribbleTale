@@ -20,16 +20,16 @@ struct StoryCompleteView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @State private var showContent = false
 
-    private var state: NarrativeState? {
-        coordinator.story?.narrativeState
+    private var session: StorySession? {
+        coordinator.story?.session
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 32) {
                 header
-                if let state {
-                    storyRecap(state)
+                if let session {
+                    storyRecap(session)
                 }
                 homeButton
             }
@@ -77,30 +77,30 @@ struct StoryCompleteView: View {
         .padding(.top, 12)
     }
 
-    private func storyRecap(_ state: NarrativeState) -> some View {
+    private func storyRecap(_ session: StorySession) -> some View {
         let storyType = coordinator.story?.storyType ?? .fantasy
 
         return VStack(spacing: 28) {
-            if !state.openingText.isEmpty {
-                Text(state.openingText)
+            if !session.openingNarrative.isEmpty {
+                Text(session.openingNarrative)
                     .font(.system(.title3, design: .serif))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
             }
 
-            ForEach(Array(state.storyBeats.enumerated()), id: \.offset) { _, beat in
-                beatCard(beat, state: state, storyType: storyType)
+            ForEach(Array(session.scenes.enumerated()), id: \.offset) { _, scene in
+                sceneCard(scene, session: session, storyType: storyType)
             }
         }
     }
 
-    private func beatCard(_ beat: StoryBeat, state: NarrativeState, storyType: StoryType) -> some View {
-        let beatPlan = state.beatPlan[safe: beat.beatIndex]
+    private func sceneCard(_ scene: SceneRecord, session: StorySession, storyType: StoryType) -> some View {
+        let beatPlan = session.beatPlan[safe: scene.sceneIndex]
 
         return VStack(spacing: 16) {
             HStack {
-                Text("Beat \(beat.beatIndex + 1)")
+                Text("Beat \(scene.sceneIndex + 1)")
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -112,19 +112,26 @@ struct StoryCompleteView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(beat.drawingSubject)
+                Text(scene.entityName)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
 
-            if let cgImage = state.generatedImages[beat.beatIndex] {
+            if let cgImage = session.generatedImages[scene.sceneIndex] {
                 Image(decorative: cgImage, scale: 1.0)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+            } else if let data = session.compressedImageData[scene.sceneIndex],
+                      let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
             } else {
-                let drawing = state.drawing(for: beat.beatIndex)
+                let drawing = session.drawing(for: scene.sceneIndex)
                 if !drawing.strokes.isEmpty {
                     Image(uiImage: drawing.renderedImage(scale: UIScreen.main.scale))
                         .resizable()
@@ -133,16 +140,16 @@ struct StoryCompleteView: View {
                 }
             }
 
-            if !beat.imageCaption.isEmpty {
-                Text(beat.imageCaption)
+            if let caption = session.imageCaptions[scene.sceneIndex], !caption.isEmpty {
+                Text(caption)
                     .font(.system(.callout, design: .serif))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if !beat.narrativeBridge.isEmpty {
-                Text(beat.narrativeBridge)
+            if !scene.narrativeText.isEmpty {
+                Text(scene.narrativeText)
                     .font(.system(.title3, design: .serif))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)

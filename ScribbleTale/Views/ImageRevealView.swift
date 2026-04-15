@@ -36,6 +36,7 @@ struct ImageRevealView: View {
     @State private var generationError: String?
     @State private var generationStatus = "Bringing your drawing to life..."
     @State private var phase: RevealPhase = .generatingImage
+    @State private var snapshotChallenge: DrawingChallenge?
 
     private enum RevealPhase {
         case generatingImage
@@ -44,16 +45,16 @@ struct ImageRevealView: View {
         case complete
     }
 
-    private var state: NarrativeState? {
-        coordinator.story?.narrativeState
+    private var session: StorySession? {
+        coordinator.story?.session
     }
 
     private var challenge: DrawingChallenge? {
-        state?.pendingChallenge
+        snapshotChallenge ?? session?.pendingChallenge
     }
 
     private var drawing: PKDrawing {
-        state?.drawing(for: chapterIndex) ?? PKDrawing()
+        session?.drawing(for: chapterIndex) ?? PKDrawing()
     }
 
     var body: some View {
@@ -226,80 +227,98 @@ struct ImageRevealView: View {
         }
     }
 
-    // MARK: - Content generation pipeline
+    // MARK: - Scene Loop Pipeline
 
     private func generateContent() async {
-        guard let story = coordinator.story,
-              let state = coordinator.story?.narrativeState,
-              let challenge = state.pendingChallenge else {
-            log.error("generateContent: no story, state, or challenge at beat \(self.chapterIndex)")
+        guard let _ = coordinator.story,
+              let session = coordinator.story?.session,
+              let challenge = session.pendingChallenge else {
+            log.error("generateContent: missing story, session, or challenge at scene \(self.chapterIndex)")
             return
         }
 
-        let imagePrompt = challenge.imageGenPrompt
+        snapshotChallenge = challenge
+
+        let enrichedPrompt = StoryEngine.enrichedImagePrompt(challenge: challenge, session: session)
         log.info("""
-            generateContent: beat \(self.chapterIndex) upfront=\(state.isUpfront)
+            generateContent: scene \(self.chapterIndex)
               subject=\(challenge.subject, privacy: .public)
-              imagePrompt=\(imagePrompt, privacy: .public)
+              imagePrompt=\(enrichedPrompt.prefix(80), privacy: .public)
               strokes=\(self.drawing.strokes.count)
             """)
 
-        // Step 1: Image generation + caption generation in parallel
+        coordinator.storyEngine.resetThinkingText()
+
+        // Step 1: Image generation first, then caption (serialized to avoid
+        // running Image Playground and MLX simultaneously — both are heavy
+        // on-device models that spike memory when overlapping).
         generationStatus = "Bringing your drawing to life..."
-        async let imageWork = generateImage(prompt: imagePrompt)
-        async let captionWork = bufferCaption(
-            subject: challenge.subject,
-            role: challenge.role,
-            state: state,
-            storyType: story.storyType
-        )
-        _ = await imageWork
-        let caption = await captionWork
+        await generateImage(prompt: enrichedPrompt)
+
+        generationStatus = "Writing your caption..."
+        let caption = await bufferCaption(session: session, challenge: challenge)
 
         // Step 2: Show caption
         phase = .showingCaption
         await revealText(caption) { text in captionText = text }
-        state.imageCaptions[chapterIndex] = caption
+        session.imageCaptions[chapterIndex] = caption
 
-        // Step 3: Narrative bridge (use pre-planned if upfront, otherwise generate)
+        // Step 3: Generate narrative bridge
+        coordinator.storyEngine.resetThinkingText()
         phase = .showingBridge
-        let beatPlan = state.beatPlan[chapterIndex]
-        let isFinalBeat = beatPlan.role == .resolve || beatPlan.role == .epilogue
-        let bridge: String
+        let beatPlan = session.beatPlan[safe: chapterIndex]
+        let isFinalBeat = beatPlan?.role == .resolve || beatPlan?.role == .epilogue
 
-        if let plannedBridge = state.plannedBridge(for: chapterIndex), !plannedBridge.isEmpty {
-            log.info("generateContent: using pre-planned bridge for beat \(self.chapterIndex)")
-            bridge = plannedBridge
+        let lastNarrativeText: String
+        if chapterIndex == 0 {
+            lastNarrativeText = session.openingNarrative
+        } else if let prevScene = session.scenes.last {
+            lastNarrativeText = prevScene.narrativeText
         } else {
-            bridge = await generateBridge(
-                subject: challenge.subject,
-                role: challenge.role,
-                state: state,
-                storyType: story.storyType,
-                beatPlan: beatPlan
-            )
+            lastNarrativeText = ""
         }
+
+        let bridge = await generateBridge(
+            session: session,
+            challenge: challenge,
+            isFinalBeat: isFinalBeat,
+            lastNarrativeText: lastNarrativeText
+        )
         await revealText(bridge) { text in bridgeText = text }
 
-        // Step 4: Record completed beat
-        let completedBeat = StoryBeat(
-            beatIndex: chapterIndex,
-            drawingSubject: challenge.subject,
-            imageCaption: caption,
-            narrativeBridge: bridge
+        // Step 4: Generate scene summary + continuity notes (memory write)
+        coordinator.storyEngine.resetThinkingText()
+        let fullNarrative = [caption, bridge].filter { !$0.isEmpty }.joined(separator: " ")
+        let summaryResult = await generateSummary(
+            narrativeText: fullNarrative,
+            subject: challenge.subject
         )
-        state.storyBeats.append(completedBeat)
 
-        // Step 5: Set up next challenge (use pre-planned if upfront, otherwise generate)
-        if !isFinalBeat && chapterIndex + 1 < state.beatPlan.count {
-            let nextIndex = chapterIndex + 1
-            if let plannedChallenge = state.plannedChallenge(for: nextIndex) {
-                log.info("generateContent: using pre-planned challenge for beat \(nextIndex)")
-                state.pendingChallenge = plannedChallenge
-            } else {
-                await generateNextChallenge(state: state, storyType: story.storyType)
-            }
+        // Step 5: Build and persist SceneRecord
+        let sceneRecord = SceneRecord(
+            sceneIndex: chapterIndex,
+            narrativeText: bridge,
+            drawingPromptText: challenge.drawingPrompt,
+            imageGenPrompt: enrichedPrompt,
+            entityName: challenge.subject,
+            entityType: inferEntityType(challenge.subject),
+            sceneSummary: summaryResult.sceneSummary,
+            continuityNotes: summaryResult.continuityNotes
+        )
+        session.scenes.append(sceneRecord)
+        coordinator.persistence.persistScene(sceneRecord, sessionID: session.id)
+
+        // Step 5b: Release heavy assets from prior scenes to reclaim memory
+        session.releaseCompletedSceneAssets(keepingCurrent: chapterIndex)
+
+        // Step 6: Generate next challenge (with dedup) if not final
+        if !isFinalBeat && chapterIndex + 1 < session.sceneCount {
+            coordinator.storyEngine.resetThinkingText()
+            let nextChallenge = await generateNextChallenge(session: session)
+            session.pendingChallenge = nextChallenge
         }
+
+        coordinator.storyEngine.resetThinkingText()
 
         phase = .complete
         withAnimation(.easeOut(duration: 0.5)) {
@@ -307,14 +326,20 @@ struct ImageRevealView: View {
         }
     }
 
+    private static let maxImageDimension: CGFloat = 768
+
     private func generateImage(prompt: String) async {
         do {
             let currentDrawing = drawing
-            let image = try await coordinator.imageService.generateImage(
+            let rawImage = try await coordinator.imageService.generateImage(
                 from: currentDrawing,
                 prompt: prompt
             )
-            state?.generatedImages[chapterIndex] = image
+            let image = rawImage.flatMap { Self.downscaled($0, maxDimension: Self.maxImageDimension) } ?? rawImage
+            session?.generatedImages[chapterIndex] = image
+            if let image {
+                session?.compressedImageData[chapterIndex] = Self.compressedJPEG(image)
+            }
             generatedImage = image
 
             if image != nil {
@@ -331,19 +356,42 @@ struct ImageRevealView: View {
         isGeneratingImage = false
     }
 
+    private static func compressedJPEG(_ image: CGImage, quality: CGFloat = 0.7) -> Data? {
+        let uiImage = UIImage(cgImage: image)
+        return uiImage.jpegData(compressionQuality: quality)
+    }
+
+    private static func downscaled(_ image: CGImage, maxDimension: CGFloat) -> CGImage? {
+        let w = CGFloat(image.width)
+        let h = CGFloat(image.height)
+        guard max(w, h) > maxDimension else { return image }
+
+        let scale = maxDimension / max(w, h)
+        let newW = Int(w * scale)
+        let newH = Int(h * scale)
+
+        guard let ctx = CGContext(
+            data: nil, width: newW, height: newH,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+        return ctx.makeImage() ?? image
+    }
+
     private func bufferCaption(
-        subject: String,
-        role: String,
-        state: NarrativeState,
-        storyType: StoryType
+        session: StorySession,
+        challenge: DrawingChallenge
     ) async -> String {
         do {
             var raw = ""
             for try await token in coordinator.storyEngine.generateImageCaption(
-                subject: subject,
-                role: role,
-                state: state,
-                storyType: storyType
+                session: session,
+                subject: challenge.subject,
+                role: challenge.role
             ) {
                 raw += token
             }
@@ -356,29 +404,24 @@ struct ImageRevealView: View {
     }
 
     private func generateBridge(
-        subject: String,
-        role: String,
-        state: NarrativeState,
-        storyType: StoryType,
-        beatPlan: BeatPlan
+        session: StorySession,
+        challenge: DrawingChallenge,
+        isFinalBeat: Bool,
+        lastNarrativeText: String
     ) async -> String {
-        let isFinalBeat = beatPlan.role == .resolve || beatPlan.role == .epilogue
         do {
             var raw = ""
             for try await token in coordinator.storyEngine.generateNarrativeBridge(
-                subject: subject,
-                role: role,
-                state: state,
-                storyType: storyType,
-                beatPlan: beatPlan
+                session: session,
+                sceneIndex: chapterIndex,
+                subject: challenge.subject,
+                role: challenge.role,
+                lastNarrativeText: lastNarrativeText
             ) {
                 raw += token
             }
             log.info("generateBridge: raw = \"\(raw, privacy: .public)\"")
             let result = StoryEngine.parseBridgeResult(raw, isFinalBeat: isFinalBeat)
-            if !result.newGap.isEmpty {
-                state.currentGap = result.newGap
-            }
             return result.narrativeBridge
         } catch {
             log.error("generateBridge: failed — \(error, privacy: .public)")
@@ -386,25 +429,60 @@ struct ImageRevealView: View {
         }
     }
 
-    private func generateNextChallenge(state: NarrativeState, storyType: StoryType) async {
+    private func generateSummary(
+        narrativeText: String,
+        subject: String
+    ) async -> StoryEngine.SummaryResult {
         do {
             var raw = ""
-            for try await token in coordinator.storyEngine.generateDrawingChallenge(
-                gap: state.currentGap,
-                state: state,
-                storyType: storyType
+            for try await token in coordinator.storyEngine.generateSceneSummary(
+                narrativeText: narrativeText,
+                subject: subject,
+                entityType: inferEntityType(subject).rawValue
             ) {
                 raw += token
             }
-            let nextRole = state.currentBeatRole ?? .complicate
-            let challenge = StoryEngine.parseDrawingChallenge(raw, fallbackRole: nextRole)
-            state.pendingChallenge = challenge
-            log.info("generateNextChallenge: subject=\"\(challenge.subject, privacy: .public)\"")
+            return StoryEngine.parseSummaryResult(raw, fallbackNarrative: narrativeText)
+        } catch {
+            log.error("generateSummary: failed — \(error, privacy: .public)")
+            return StoryEngine.SummaryResult(
+                sceneSummary: narrativeText.splitSentences().first ?? narrativeText,
+                continuityNotes: ""
+            )
+        }
+    }
+
+    private func generateNextChallenge(session: StorySession) async -> DrawingChallenge {
+        let nextIndex = chapterIndex + 1
+        let nextRole = session.beatPlan[safe: nextIndex]?.role ?? .complicate
+
+        var raw = ""
+        do {
+            for try await token in coordinator.storyEngine.generateDrawingChallengeWithDedup(
+                session: session,
+                sceneIndex: nextIndex
+            ) {
+                raw += token
+            }
         } catch {
             log.error("generateNextChallenge: failed — \(error, privacy: .public)")
-            let nextRole = state.currentBeatRole ?? .complicate
-            state.pendingChallenge = DrawingChallenge.fallbacks[nextRole]
+            return DrawingChallenge.fallbacks[nextRole] ?? DrawingChallenge.fallbacks[.introduce]!
         }
+
+        let challenge = StoryEngine.parseDrawingChallenge(raw, fallbackRole: nextRole)
+        return StoryEngine.validateChallenge(challenge, session: session, sceneIndex: nextIndex)
+    }
+
+    private func inferEntityType(_ subject: String) -> SceneRecord.EntityType {
+        let lower = subject.lowercased()
+        let creatureWords = ["rabbit", "fox", "owl", "bear", "otter", "deer", "mouse", "cat",
+                             "wolf", "badger", "bird", "dragon", "creature", "butterfly", "fish"]
+        let placeWords = ["forest", "cave", "river", "mountain", "house", "den", "castle",
+                          "lake", "bridge", "village", "garden", "island"]
+
+        if creatureWords.contains(where: { lower.contains($0) }) { return .creature }
+        if placeWords.contains(where: { lower.contains($0) }) { return .place }
+        return .object
     }
 
     private func revealText(_ text: String, update: @escaping (String) -> Void) async {

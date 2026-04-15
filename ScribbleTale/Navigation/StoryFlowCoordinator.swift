@@ -1,4 +1,7 @@
 import SwiftUI
+import os
+
+private let log = Logger(subsystem: "com.scribbletale.app", category: "StoryFlowCoordinator")
 
 @Observable
 @MainActor
@@ -9,6 +12,7 @@ final class StoryFlowCoordinator {
     private(set) var storyEngine: StoryEngine
     private(set) var imageService: ImageGenerationService
     let config = ProviderConfig.shared
+    let persistence = StoryPersistence.shared
 
     private var mlxProvider: MLXTextProvider
     private var openAITextProvider: OpenAITextProvider
@@ -41,8 +45,8 @@ final class StoryFlowCoordinator {
         )
     }
 
-    /// Switch the text provider based on which model is selected.
     func selectTextModel(_ model: StoryModel) {
+        log.info("selectTextModel: \(model.displayName, privacy: .public) isLocal=\(model.isLocal)")
         if model.isLocal {
             storyEngine = StoryEngine(textProvider: mlxProvider)
         } else {
@@ -51,8 +55,8 @@ final class StoryFlowCoordinator {
         }
     }
 
-    /// Rebuild the image service based on current config.
     func refreshImageProvider() {
+        log.info("refreshImageProvider: \(self.config.imageProvider.rawValue, privacy: .public)")
         switch config.imageProvider {
         case .local:
             imageService = ImageGenerationService(

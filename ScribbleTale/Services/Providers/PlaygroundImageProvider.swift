@@ -11,6 +11,7 @@ private let log = Logger(subsystem: "com.scribbletale.app", category: "Playgroun
 final class PlaygroundImageProvider: ImageGenerationProvider {
     private(set) var isGenerating = false
     private(set) var isAvailable = false
+    private(set) var unavailableReason: String?
 
     private static let minStrokesForDrawingConcept = 3
 
@@ -68,19 +69,30 @@ final class PlaygroundImageProvider: ImageGenerationProvider {
 
         log.info("generateImage: prompt=\(prompt, privacy: .public), style=\(String(describing: style), privacy: .public), drawingUsable=\(drawingUsable)")
 
-        if let image = try await attemptGeneration(
-            creator: creator, style: style, prompt: prompt,
-            drawing: drawing ?? PKDrawing(), drawingUsable: drawingUsable
-        ) {
-            return image
+        do {
+            if let image = try await attemptGeneration(
+                creator: creator, style: style, prompt: prompt,
+                drawing: drawing ?? PKDrawing(), drawingUsable: drawingUsable
+            ) {
+                return image
+            }
+        } catch {
+            log.info("generateImage: first attempt failed (\(error, privacy: .public)), will retry with ultra-safe prompt")
         }
 
         let safePrompt = Self.ultraSafePrompt(from: prompt)
         log.info("generateImage: retrying with ultra-safe prompt — \(safePrompt, privacy: .public)")
-        return try await attemptGeneration(
-            creator: creator, style: style, prompt: safePrompt,
-            drawing: drawing ?? PKDrawing(), drawingUsable: drawingUsable
-        )
+        do {
+            return try await attemptGeneration(
+                creator: creator, style: style, prompt: safePrompt,
+                drawing: PKDrawing(), drawingUsable: false
+            )
+        } catch let error as ImageGenerationError where error == .unsupportedLanguage {
+            log.error("generateImage: ultra-safe prompt also rejected as unsupportedLanguage — disabling provider")
+            unavailableReason = error.localizedDescription
+            isAvailable = false
+            throw error
+        }
     }
 
     // MARK: - Private
@@ -115,6 +127,10 @@ final class PlaygroundImageProvider: ImageGenerationProvider {
                     return result.cgImage
                 }
                 log.warning("generateImage: '\(label, privacy: .public)' stream completed with no images")
+            } catch let error as ImageCreator.Error where error == .unsupportedLanguage {
+                log.warning("generateImage: '\(label, privacy: .public)' failed — unsupportedLanguage (prompt or concept combination rejected by Image Playground, trying next fallback)")
+                lastError = ImageGenerationError.unsupportedLanguage
+                continue
             } catch {
                 log.warning("generateImage: '\(label, privacy: .public)' failed — \(error, privacy: .public)")
                 lastError = error

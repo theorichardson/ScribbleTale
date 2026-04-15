@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ScribbleTaleApp: App {
@@ -8,6 +9,7 @@ struct ScribbleTaleApp: App {
         WindowGroup {
             ContentView()
                 .environment(coordinator)
+                .modelContainer(coordinator.persistence.modelContainer)
         }
     }
 }
