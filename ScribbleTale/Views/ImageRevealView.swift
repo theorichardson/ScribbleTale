@@ -33,7 +33,6 @@ struct ImageRevealView: View {
     @State private var imageScale: CGFloat = 0.8
     @State private var imageOpacity: Double = 0
     @State private var generationError: String?
-    @State private var generationStatus = "Bringing your drawing to life..."
     @State private var phase: RevealPhase = .generatingImage
     @State private var snapshotChallenge: DrawingChallenge?
 
@@ -60,6 +59,7 @@ struct ImageRevealView: View {
             backgroundGradient
 
             VStack(spacing: 0) {
+                chapterProgressBar
                 ScrollView {
                     VStack(spacing: 24) {
                         chapterHeader
@@ -99,6 +99,26 @@ struct ImageRevealView: View {
         .ignoresSafeArea()
     }
 
+    private var chapterProgressBar: some View {
+        HStack(spacing: 6) {
+            let totalBeats = coordinator.story?.chapterCount ?? 5
+            ForEach(0..<totalBeats, id: \.self) { i in
+                Capsule()
+                    .fill(
+                        i < chapterIndex
+                            ? (coordinator.story?.storyType.color ?? .purple)
+                            : i == chapterIndex
+                                ? (coordinator.story?.storyType.color ?? .purple).opacity(0.5)
+                                : Color(.systemGray4)
+                    )
+                    .frame(height: 4)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
     private var chapterHeader: some View {
         VStack(spacing: 4) {
             if let subject = challenge?.subject {
@@ -113,28 +133,17 @@ struct ImageRevealView: View {
     private var imageSection: some View {
         Group {
             if isGeneratingImage, let story = coordinator.story {
-                VStack(spacing: 16) {
-                    TransformingDrawingPlaceholder(
-                        drawing: drawing,
-                        storyType: story.storyType
-                    )
-
-                    Text(generationStatus)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
+                TransformingDrawingPlaceholder(
+                    drawing: drawing,
+                    storyType: story.storyType
+                )
             } else if isGeneratingImage {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(Color(.systemGray5))
                     .frame(height: 300)
                     .overlay {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                            Text(generationStatus)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
+                        ProgressView()
+                            .scaleEffect(1.5)
                     }
             } else if let image = generatedImage {
                 let themeColors = coordinator.story?.storyType.gradientColors ?? [.purple, .blue]
@@ -254,7 +263,6 @@ struct ImageRevealView: View {
             """)
 
         // Step 1: Generate image (only async work remaining per scene)
-        generationStatus = "Bringing your drawing to life..."
         await generateImage(prompt: enrichedPrompt)
 
         // Step 2: Show pre-generated story continuation

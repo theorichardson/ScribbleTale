@@ -21,11 +21,11 @@ struct DrawingToolbar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
     }
 
     private var colorPalette: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             ForEach(colors, id: \.self) { color in
                 Button {
                     selectedColor = color
@@ -37,12 +37,13 @@ struct DrawingToolbar: View {
                         .overlay {
                             if selectedColor == color && !isEraser {
                                 Circle()
-                                    .strokeBorder(.white, lineWidth: 3)
+                                    .strokeBorder(Color.accentColor, lineWidth: 3)
                                     .frame(width: 38, height: 38)
                             }
                         }
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -58,6 +59,7 @@ struct DrawingToolbar: View {
                     .frame(width: 44, height: 44)
                     .background(isEraser ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(.plain)
 
             Slider(value: $lineWidth, in: 2...20, step: 1)
                 .tint(.secondary)
@@ -66,16 +68,18 @@ struct DrawingToolbar: View {
                 Button(action: onUndo) {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                 }
+                .buttonStyle(.plain)
 
                 Button(action: onRedo) {
                     Image(systemName: "arrow.uturn.forward")
                         .font(.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                 }
+                .buttonStyle(.plain)
 
                 Button(action: onClear) {
                     Image(systemName: "trash")
@@ -83,6 +87,7 @@ struct DrawingToolbar: View {
                         .frame(width: 44, height: 44)
                         .foregroundStyle(.red)
                 }
+                .buttonStyle(.plain)
             }
         }
     }

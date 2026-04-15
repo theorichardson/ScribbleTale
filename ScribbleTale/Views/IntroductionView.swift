@@ -153,7 +153,7 @@ struct IntroductionView: View {
 
         await revealText(parsed.introduction)
 
-        buttonLabel = "Draw \(challenge.subject)!"
+        buttonLabel = "Let's draw!"
         coordinator.persistence.createSession(from: session)
         coordinator.storyEngine.resetThinkingText()
 
