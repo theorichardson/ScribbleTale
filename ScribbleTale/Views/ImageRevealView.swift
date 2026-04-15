@@ -27,7 +27,6 @@ struct ImageRevealView: View {
 
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @State private var generatedImage: CGImage?
-    @State private var captionText = ""
     @State private var bridgeText = ""
     @State private var isGeneratingImage = true
     @State private var isReady = false
@@ -40,7 +39,6 @@ struct ImageRevealView: View {
 
     private enum RevealPhase {
         case generatingImage
-        case showingCaption
         case showingBridge
         case complete
     }
