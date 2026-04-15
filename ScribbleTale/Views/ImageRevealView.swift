@@ -103,13 +103,11 @@ struct ImageRevealView: View {
 
     private var chapterHeader: some View {
         VStack(spacing: 4) {
-            Text("Beat \(chapterIndex + 1) of \(coordinator.story?.chapterCount ?? 5)")
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(.secondary)
             if let subject = challenge?.subject {
                 Text(subject)
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
+                    .frame(maxWidth: .infinity)
             }
         }
     }
@@ -141,13 +139,35 @@ struct ImageRevealView: View {
                         }
                     }
             } else if let image = generatedImage {
-                Image(decorative: image, scale: 1.0)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
-                    .scaleEffect(imageScale)
-                    .opacity(imageOpacity)
+                let themeColors = coordinator.story?.storyType.gradientColors ?? [.purple, .blue]
+                let themeColor = coordinator.story?.storyType.color ?? .purple
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    themeColors[0].opacity(0.6),
+                                    themeColors.count > 1 ? themeColors[1].opacity(0.35) : themeColor.opacity(0.35),
+                                    themeColor.opacity(0.15),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 20,
+                                endRadius: 280
+                            )
+                        )
+                        .blur(radius: 30)
+                        .scaleEffect(1.15)
+
+                    Image(decorative: image, scale: 1.0)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .shadow(color: themeColor.opacity(0.4), radius: 16, y: 6)
+                }
+                .scaleEffect(imageScale)
+                .opacity(imageOpacity)
             } else {
                 userDrawingFallback
                     .overlay(alignment: .bottom) {
@@ -189,7 +209,7 @@ struct ImageRevealView: View {
                 font: .system(.title2, design: .serif),
                 color: .primary
             )
-            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .transition(.opacity)
         }
     }
