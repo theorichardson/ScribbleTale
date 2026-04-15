@@ -3,26 +3,17 @@ import Foundation
 @Observable
 final class Story: @unchecked Sendable {
     let storyType: StoryType
-    var introText: String
-    var chapters: [Chapter]
+    let narrativeState: NarrativeState
 
-    static let chapterDefinitions: [(beat: StoryBeat, subject: DrawingSubject)] = [
-        (.character,  .mainCharacter),
-        (.companion,  .pet),
-        (.setting,    .scene),
-        (.object,     .object),
-        (.villain,    .villain),
-        (.climax,     .ally),
-        (.resolution, .scene),
-    ]
+    static let beatCount = 5
 
-    static var chapterCount: Int { chapterDefinitions.count }
+    var chapterCount: Int { narrativeState.beatPlan.count }
 
     init(storyType: StoryType) {
         self.storyType = storyType
-        self.introText = ""
-        self.chapters = Self.chapterDefinitions.enumerated().map { index, def in
-            Chapter(index: index, beat: def.beat, drawingSubject: def.subject)
-        }
+        self.narrativeState = NarrativeState(
+            genre: storyType.rawValue,
+            beatCount: Self.beatCount
+        )
     }
 }

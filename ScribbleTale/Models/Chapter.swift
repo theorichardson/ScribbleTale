@@ -2,117 +2,172 @@ import Foundation
 import PencilKit
 import CoreGraphics
 
-enum StoryBeat: String, Codable, Sendable {
-    case character = "Character"
-    case companion = "Companion"
-    case setting = "Setting"
-    case object = "Object"
-    case villain = "Villain"
-    case climax = "Climax"
-    case resolution = "Resolution"
-}
+// MARK: - Beat Arc Planning
 
-enum DrawingSubject: String, Codable, Sendable {
-    case mainCharacter
-    case ally
-    case villain
-    case pet
-    case object
-    case scene
+enum BeatRole: String, Codable, Sendable, CaseIterable {
+    case introduce
+    case complicate
+    case escalate
+    case resolve
+    case epilogue
 
-    var displayName: String {
+    var tonalNote: String {
         switch self {
-        case .mainCharacter: "Your Hero"
-        case .ally: "A Friend"
-        case .villain: "The Troublemaker"
-        case .pet: "A Companion"
-        case .object: "A Special Item"
-        case .scene: "A Place"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .mainCharacter: "hare.fill"
-        case .ally: "bird.fill"
-        case .villain: "theatermasks.fill"
-        case .pet: "pawprint.fill"
-        case .object: "sparkle"
-        case .scene: "mountain.2.fill"
-        }
-    }
-
-    /// Context given to the LLM when generating the child's drawing prompt.
-    /// All characters MUST be animals or creatures — Image Playground cannot
-    /// generate people without a source photo.
-    var drawingPromptHint: String {
-        switch self {
-        case .mainCharacter:
-            "Ask the child to draw an animal or creature who is the hero of the story."
-        case .ally:
-            "Ask the child to draw a friendly animal or creature who helps the hero."
-        case .villain:
-            "Ask the child to draw a sneaky or scary animal, monster, or creature who causes trouble."
-        case .pet:
-            "Ask the child to draw a small animal companion or pet that joins the adventure."
-        case .object:
-            "Ask the child to draw a special object, tool, or magical item."
-        case .scene:
-            "Ask the child to draw a place or setting where the story happens."
-        }
-    }
-
-    /// Context passed into the image generation pipeline so it knows what kind of subject the drawing depicts.
-    /// IMPORTANT: Avoid "person", "human", "boy", "girl", "man", "woman" — Image Playground
-    /// rejects prompts depicting people without a personIdentity photo reference.
-    var pipelineContext: String {
-        switch self {
-        case .mainCharacter:
-            "The child drew the story's main creature or fantastical hero."
-        case .ally:
-            "The child drew a friendly creature or magical companion."
-        case .villain:
-            "The child drew a mischievous monster, beast, or shadowy villain."
-        case .pet:
-            "The child drew an animal companion or pet creature."
-        case .object:
-            "The child drew a special object, tool, or magical item."
-        case .scene:
-            "The child drew a location, landscape, or place."
+        case .introduce:  "This is early in the story. Keep tension low. Set the scene."
+        case .complicate: "A problem is starting. The object creates as much trouble as it helps."
+        case .escalate:   "This is the hardest moment. The protagonist is stuck."
+        case .resolve:    "The object solves the problem. The ending should feel earned and satisfying."
+        case .epilogue:   "The story is over. Write a calm, warm closing."
         }
     }
 }
+
+struct BeatPlan: Sendable {
+    let beatIndex: Int
+    let role: BeatRole
+}
+
+// MARK: - Drawing Challenge
+
+struct DrawingChallenge: Sendable {
+    let subject: String
+    let role: String
+    let drawingPrompt: String
+    let imageGenPrompt: String
+
+    static let fallbacks: [BeatRole: DrawingChallenge] = [
+        .introduce: DrawingChallenge(
+            subject: "a curious rabbit",
+            role: "the hero who starts the adventure",
+            drawingPrompt: "Draw a curious rabbit ready for an adventure!",
+            imageGenPrompt: "A curious rabbit with bright eyes standing on a grassy hill, children's storybook illustration, warm colors, soft edges"
+        ),
+        .complicate: DrawingChallenge(
+            subject: "a locked gate",
+            role: "blocks the path forward",
+            drawingPrompt: "Draw a locked gate blocking the way!",
+            imageGenPrompt: "A tall wooden gate with a rusty lock in a misty forest, children's storybook illustration, warm colors, soft edges"
+        ),
+        .escalate: DrawingChallenge(
+            subject: "a storm cloud",
+            role: "makes everything harder",
+            drawingPrompt: "Draw a big storm cloud!",
+            imageGenPrompt: "A dark swirling storm cloud with rain over a small village, children's storybook illustration, dramatic lighting, soft edges"
+        ),
+        .resolve: DrawingChallenge(
+            subject: "a golden key",
+            role: "opens what was locked",
+            drawingPrompt: "Draw a golden key that can save the day!",
+            imageGenPrompt: "A glowing golden key with intricate patterns, floating in warm light, children's storybook illustration, warm colors, soft edges"
+        ),
+        .epilogue: DrawingChallenge(
+            subject: "a cozy den",
+            role: "a safe place to rest after the adventure",
+            drawingPrompt: "Draw a cozy den where everyone can rest!",
+            imageGenPrompt: "A warm cozy animal den with soft blankets and lantern light, children's storybook illustration, warm colors, soft edges"
+        ),
+    ]
+}
+
+// MARK: - Story Beat (completed turn)
+
+struct StoryBeat: Sendable {
+    let beatIndex: Int
+    let drawingSubject: String
+    let imageCaption: String
+    let narrativeBridge: String
+}
+
+// MARK: - Narrative State
 
 @Observable
-final class Chapter: Identifiable, @unchecked Sendable {
-    let id = UUID()
-    let index: Int
-    let beat: StoryBeat
-    let drawingSubject: DrawingSubject
-    var drawingPrompt: String
-    var imageGenerationPrompt: String
-    var drawing: PKDrawing
-    var generatedImage: CGImage?
-    var narration: String
+final class NarrativeState: @unchecked Sendable {
+    var title: String = ""
+    var genre: String = ""
+    var setting: String = ""
+    var protagonist: String = ""
+    var openingText: String = ""
 
-    init(
-        index: Int,
-        beat: StoryBeat,
-        drawingSubject: DrawingSubject,
-        drawingPrompt: String = "",
-        imageGenerationPrompt: String = "",
-        narration: String = ""
-    ) {
-        self.index = index
-        self.beat = beat
-        self.drawingSubject = drawingSubject
-        self.drawingPrompt = drawingPrompt
-        self.imageGenerationPrompt = imageGenerationPrompt
-        self.drawing = PKDrawing()
-        self.narration = narration
+    var storyBeats: [StoryBeat] = []
+    var pendingChallenge: DrawingChallenge?
+    var currentGap: String = ""
+    let beatPlan: [BeatPlan]
+
+    // Per-beat runtime state indexed by beat index
+    var drawings: [Int: PKDrawing] = [:]
+    var generatedImages: [Int: CGImage] = [:]
+    var imageCaptions: [Int: String] = [:]
+
+    init(genre: String, beatCount: Int = 5) {
+        self.genre = genre
+        self.beatPlan = Self.makeBeatPlan(beatCount: beatCount)
     }
 
-    var hasDrawing: Bool {
-        !drawing.strokes.isEmpty
+    var currentBeatIndex: Int { storyBeats.count }
+    var isComplete: Bool { currentBeatIndex >= beatPlan.count }
+
+    var currentBeatRole: BeatRole? {
+        beatPlan[safe: currentBeatIndex]?.role
+    }
+
+    func drawing(for beatIndex: Int) -> PKDrawing {
+        drawings[beatIndex] ?? PKDrawing()
+    }
+
+    func setDrawing(_ drawing: PKDrawing, for beatIndex: Int) {
+        drawings[beatIndex] = drawing
+    }
+
+    // MARK: - Context Compression
+
+    /// Compressed context string for LLM prompts.
+    /// Max 3 prior beats, each trimmed to one sentence, targeting ~150 tokens.
+    func compressedContext() -> String {
+        var parts: [String] = []
+
+        if !title.isEmpty { parts.append(title + ".") }
+        if !setting.isEmpty { parts.append(setting) }
+        if !protagonist.isEmpty { parts.append(protagonist) }
+
+        let recentBeats = storyBeats.suffix(3)
+        for beat in recentBeats {
+            let trimmed = beat.narrativeBridge.trimmedToFirstSentence()
+            parts.append("Beat \(beat.beatIndex + 1): \(beat.drawingSubject) — \(trimmed)")
+        }
+
+        var result = parts.joined(separator: " ")
+        // Hard cap at ~600 characters (~150 tokens)
+        if result.count > 600 {
+            result = String(result.prefix(600))
+        }
+        return result
+    }
+
+    // MARK: - Beat Plan Factory
+
+    static func makeBeatPlan(beatCount: Int) -> [BeatPlan] {
+        let roles: [BeatRole] = [.introduce, .complicate, .escalate, .resolve, .epilogue]
+        return (0..<beatCount).map { index in
+            let role = index < roles.count ? roles[index] : .epilogue
+            return BeatPlan(beatIndex: index, role: role)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private extension String {
+    func trimmedToFirstSentence() -> String {
+        let terminators: [Character] = [".", "!", "?"]
+        if let idx = self.firstIndex(where: { terminators.contains($0) }) {
+            return String(self[...idx])
+        }
+        return self
+    }
+}
+
+extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

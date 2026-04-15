@@ -31,7 +31,8 @@ final class StoryFlowCoordinator {
 
     func goToNextChapterOrComplete(currentChapterIndex: Int) {
         let nextIndex = currentChapterIndex + 1
-        if nextIndex < Story.chapterCount {
+        let totalBeats = story?.chapterCount ?? 5
+        if nextIndex < totalBeats {
             path.append(Destination.drawing(chapterIndex: nextIndex))
         } else {
             path.append(Destination.storyComplete)

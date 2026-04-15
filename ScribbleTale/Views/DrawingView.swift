@@ -4,7 +4,6 @@ import PencilKit
 struct DrawingView: View {
     let chapterIndex: Int
 
-    /// Slightly larger than the previous canvas ↔ toolbar gap (~8pt) for consistent section rhythm.
     private let sectionSpacing: CGFloat = 14
 
     @Environment(StoryFlowCoordinator.self) private var coordinator
@@ -14,8 +13,12 @@ struct DrawingView: View {
     @State private var isEraser = false
     @State private var undoManager: UndoManager?
 
-    private var chapter: Chapter? {
-        coordinator.story?.chapters[safe: chapterIndex]
+    private var state: NarrativeState? {
+        coordinator.story?.narrativeState
+    }
+
+    private var challenge: DrawingChallenge? {
+        state?.pendingChallenge
     }
 
     var body: some View {
@@ -32,7 +35,7 @@ struct DrawingView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Chapter \(chapterIndex + 1) of \(Story.chapterCount)")
+                Text("Beat \(chapterIndex + 1) of \(coordinator.story?.chapterCount ?? 5)")
                     .font(.system(.headline, design: .rounded))
             }
         }
@@ -40,7 +43,8 @@ struct DrawingView: View {
 
     private var chapterProgressBar: some View {
         HStack(spacing: 6) {
-            ForEach(0..<Story.chapterCount, id: \.self) { i in
+            let totalBeats = coordinator.story?.chapterCount ?? 5
+            ForEach(0..<totalBeats, id: \.self) { i in
                 Capsule()
                     .fill(
                         i < chapterIndex
@@ -58,7 +62,7 @@ struct DrawingView: View {
     }
 
     private var promptBanner: some View {
-        Text(chapter?.drawingPrompt ?? "Draw something!")
+        Text(challenge?.drawingPrompt ?? "Draw something!")
             .font(.system(.title2, design: .rounded, weight: .bold))
             .multilineTextAlignment(.center)
             .padding(.horizontal, 20)
@@ -74,8 +78,10 @@ struct DrawingView: View {
 
             DrawingCanvas(
                 drawing: Binding(
-                    get: { chapter?.drawing ?? PKDrawing() },
-                    set: { chapter?.drawing = $0 }
+                    get: { state?.drawing(for: chapterIndex) ?? PKDrawing() },
+                    set: { newDrawing in
+                        state?.setDrawing(newDrawing, for: chapterIndex)
+                    }
                 ),
                 hasDrawn: $hasDrawn,
                 canvasUndoManager: $undoManager,
@@ -100,7 +106,7 @@ struct DrawingView: View {
                 undoManager?.redo()
             },
             onClear: {
-                chapter?.drawing = PKDrawing()
+                state?.setDrawing(PKDrawing(), for: chapterIndex)
                 hasDrawn = false
             }
         )
@@ -127,11 +133,5 @@ struct DrawingView: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
         .animation(.easeInOut(duration: 0.3), value: hasDrawn)
-    }
-}
-
-extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

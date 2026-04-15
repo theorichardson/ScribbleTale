@@ -2,10 +2,11 @@ import SwiftUI
 
 struct IntroductionView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
-    @State private var introText = ""
+    @State private var displayText = ""
     @State private var isReady = false
     @State private var showButton = false
     @State private var errorMessage: String?
+    @State private var buttonLabel = "Let's draw!"
 
     var body: some View {
         ZStack {
@@ -61,7 +62,7 @@ struct IntroductionView: View {
             }
 
             StreamingText(
-                text: introText,
+                text: displayText,
                 font: .system(.title2, design: .serif),
                 color: .primary
             )
@@ -73,7 +74,7 @@ struct IntroductionView: View {
         Button {
             coordinator.goToDrawing(chapterIndex: 0)
         } label: {
-            Text("Draw your hero!")
+            Text(buttonLabel)
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -89,37 +90,49 @@ struct IntroductionView: View {
 
     private func generateIntro() async {
         guard let story = coordinator.story else { return }
+        let state = story.narrativeState
 
+        // Step 1: Generate and stream the introduction
+        var raw = ""
         do {
-            var raw = ""
             for try await token in coordinator.storyEngine.generateIntroduction(for: story.storyType) {
                 raw += token
-                introText = raw
+                displayText = raw
             }
-            story.introText = StoryEngine.cleanGeneratedText(raw)
-            introText = story.introText
         } catch {
             errorMessage = "Oops! The story brain had a hiccup. Try again!"
             print("Generation error: \(error)")
             return
         }
 
-        // Generate only the first chapter's drawing prompt
-        if let firstChapter = story.chapters.first {
-            do {
-                var drawPrompt = ""
-                for try await token in coordinator.storyEngine.generateDrawingPrompt(
-                    for: firstChapter,
-                    storyType: story.storyType,
-                    previousChapters: [],
-                    introText: story.introText
-                ) {
-                    drawPrompt += token
-                }
-                firstChapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
-            } catch {
-                print("Drawing prompt generation error: \(error)")
+        // Step 2: Parse structured fields into NarrativeState
+        let result = StoryEngine.parseIntroduction(raw, storyType: story.storyType)
+        state.setting = result.setting
+        state.protagonist = result.protagonist
+        state.openingText = result.opening
+        state.currentGap = result.gap
+
+        displayText = result.opening
+
+        // Step 3: Generate the first drawing challenge from the GAP
+        do {
+            var challengeRaw = ""
+            for try await token in coordinator.storyEngine.generateDrawingChallenge(
+                gap: state.currentGap,
+                state: state,
+                storyType: story.storyType
+            ) {
+                challengeRaw += token
             }
+            let fallbackRole = state.currentBeatRole ?? .introduce
+            let challenge = StoryEngine.parseDrawingChallenge(challengeRaw, fallbackRole: fallbackRole)
+            state.pendingChallenge = challenge
+            buttonLabel = "Draw \(challenge.subject)!"
+        } catch {
+            print("Drawing challenge generation error: \(error)")
+            let fallbackRole = state.currentBeatRole ?? .introduce
+            state.pendingChallenge = DrawingChallenge.fallbacks[fallbackRole]
+            buttonLabel = "Let's draw!"
         }
 
         withAnimation(.easeOut(duration: 0.5)) {
@@ -127,5 +140,4 @@ struct IntroductionView: View {
             showButton = true
         }
     }
-
 }

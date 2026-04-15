@@ -20,12 +20,16 @@ struct StoryCompleteView: View {
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @State private var showContent = false
 
+    private var state: NarrativeState? {
+        coordinator.story?.narrativeState
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 32) {
                 header
-                if let story = coordinator.story {
-                    storyRecap(story)
+                if let state {
+                    storyRecap(state)
                 }
                 homeButton
             }
@@ -73,55 +77,72 @@ struct StoryCompleteView: View {
         .padding(.top, 12)
     }
 
-    private func storyRecap(_ story: Story) -> some View {
-        VStack(spacing: 28) {
-            if !story.introText.isEmpty {
-                Text(story.introText)
+    private func storyRecap(_ state: NarrativeState) -> some View {
+        let storyType = coordinator.story?.storyType ?? .fantasy
+
+        return VStack(spacing: 28) {
+            if !state.openingText.isEmpty {
+                Text(state.openingText)
                     .font(.system(.title3, design: .serif))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
             }
 
-            ForEach(story.chapters) { chapter in
-                chapterCard(chapter, storyType: story.storyType)
+            ForEach(Array(state.storyBeats.enumerated()), id: \.offset) { _, beat in
+                beatCard(beat, state: state, storyType: storyType)
             }
         }
     }
 
-    private func chapterCard(_ chapter: Chapter, storyType: StoryType) -> some View {
-        VStack(spacing: 16) {
+    private func beatCard(_ beat: StoryBeat, state: NarrativeState, storyType: StoryType) -> some View {
+        let beatPlan = state.beatPlan[safe: beat.beatIndex]
+
+        return VStack(spacing: 16) {
             HStack {
-                Text("Chapter \(chapter.index + 1)")
+                Text("Beat \(beat.beatIndex + 1)")
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
                     .background(storyType.color, in: Capsule())
-                Text(chapter.beat.rawValue)
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
+                if let role = beatPlan?.role {
+                    Text(role.rawValue.capitalized)
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                Label(chapter.drawingSubject.displayName, systemImage: chapter.drawingSubject.icon)
+                Text(beat.drawingSubject)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
 
-            if let cgImage = chapter.generatedImage {
+            if let cgImage = state.generatedImages[beat.beatIndex] {
                 Image(decorative: cgImage, scale: 1.0)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
-            } else if chapter.hasDrawing {
-                Image(uiImage: chapter.drawing.renderedImage(scale: UIScreen.main.scale))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            } else {
+                let drawing = state.drawing(for: beat.beatIndex)
+                if !drawing.strokes.isEmpty {
+                    Image(uiImage: drawing.renderedImage(scale: UIScreen.main.scale))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
             }
 
-            if !chapter.narration.isEmpty {
-                Text(chapter.narration)
+            if !beat.imageCaption.isEmpty {
+                Text(beat.imageCaption)
+                    .font(.system(.callout, design: .serif))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !beat.narrativeBridge.isEmpty {
+                Text(beat.narrativeBridge)
                     .font(.system(.title3, design: .serif))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)

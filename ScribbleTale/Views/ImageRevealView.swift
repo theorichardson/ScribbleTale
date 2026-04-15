@@ -27,17 +27,33 @@ struct ImageRevealView: View {
 
     @Environment(StoryFlowCoordinator.self) private var coordinator
     @State private var generatedImage: CGImage?
-    @State private var narrationText = ""
-    @State private var bufferedNarration = ""
+    @State private var captionText = ""
+    @State private var bridgeText = ""
     @State private var isGeneratingImage = true
     @State private var isReady = false
     @State private var imageScale: CGFloat = 0.8
     @State private var imageOpacity: Double = 0
     @State private var generationError: String?
     @State private var generationStatus = "Bringing your drawing to life..."
+    @State private var phase: RevealPhase = .generatingImage
 
-    private var chapter: Chapter? {
-        coordinator.story?.chapters[safe: chapterIndex]
+    private enum RevealPhase {
+        case generatingImage
+        case showingCaption
+        case showingBridge
+        case complete
+    }
+
+    private var state: NarrativeState? {
+        coordinator.story?.narrativeState
+    }
+
+    private var challenge: DrawingChallenge? {
+        state?.pendingChallenge
+    }
+
+    private var drawing: PKDrawing {
+        state?.drawing(for: chapterIndex) ?? PKDrawing()
     }
 
     var body: some View {
@@ -49,7 +65,8 @@ struct ImageRevealView: View {
                     VStack(spacing: 24) {
                         chapterHeader
                         imageSection
-                        narrationSection
+                        captionSection
+                        bridgeSection
                     }
                     .padding(24)
                 }
@@ -85,16 +102,26 @@ struct ImageRevealView: View {
     }
 
     private var chapterHeader: some View {
-        Text(chapter?.drawingSubject.displayName ?? "")
-            .font(.system(.title, design: .rounded, weight: .bold))
-            .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
+        VStack(spacing: 4) {
+            Text("Beat \(chapterIndex + 1) of \(coordinator.story?.chapterCount ?? 5)")
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .foregroundStyle(.secondary)
+            if let subject = challenge?.subject {
+                Text(subject)
+                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .foregroundStyle(coordinator.story?.storyType.color ?? .purple)
+            }
+        }
     }
 
     private var imageSection: some View {
         Group {
-            if isGeneratingImage, let chapter, let story = coordinator.story {
+            if isGeneratingImage, let story = coordinator.story {
                 VStack(spacing: 16) {
-                    TransformingDrawingPlaceholder(chapter: chapter, storyType: story.storyType)
+                    TransformingDrawingPlaceholder(
+                        drawing: drawing,
+                        storyType: story.storyType
+                    )
 
                     Text(generationStatus)
                         .font(.system(.caption, design: .rounded))
@@ -140,27 +167,38 @@ struct ImageRevealView: View {
 
     @ViewBuilder
     private var userDrawingFallback: some View {
-        if let chapter {
-            Image(uiImage: chapter.drawing.renderedImage(scale: UIScreen.main.scale))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .strokeBorder(
-                            (coordinator.story?.storyType.color ?? .purple).opacity(0.3),
-                            lineWidth: 2
-                        )
-                )
-                .padding(4)
+        Image(uiImage: drawing.renderedImage(scale: UIScreen.main.scale))
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(
+                        (coordinator.story?.storyType.color ?? .purple).opacity(0.3),
+                        lineWidth: 2
+                    )
+            )
+            .padding(4)
+    }
+
+    @ViewBuilder
+    private var captionSection: some View {
+        if !captionText.isEmpty && phase != .generatingImage {
+            StreamingText(
+                text: captionText,
+                font: .system(.body, design: .serif),
+                color: .secondary
+            )
+            .padding(.horizontal, 8)
+            .transition(.opacity)
         }
     }
 
     @ViewBuilder
-    private var narrationSection: some View {
-        if !isGeneratingImage && !narrationText.isEmpty {
+    private var bridgeSection: some View {
+        if !bridgeText.isEmpty && (phase == .showingBridge || phase == .complete) {
             StreamingText(
-                text: narrationText,
+                text: bridgeText,
                 font: .system(.title2, design: .serif),
                 color: .primary
             )
@@ -173,7 +211,8 @@ struct ImageRevealView: View {
         Button {
             coordinator.goToNextChapterOrComplete(currentChapterIndex: chapterIndex)
         } label: {
-            Text(chapterIndex < Story.chapterCount - 1 ? "Continue the story" : "See your story")
+            let totalBeats = coordinator.story?.chapterCount ?? 5
+            Text(chapterIndex < totalBeats - 1 ? "Continue the story" : "See your story")
                 .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -186,57 +225,82 @@ struct ImageRevealView: View {
         }
     }
 
-    // MARK: - Content generation
+    // MARK: - Content generation pipeline
 
     private func generateContent() async {
         guard let story = coordinator.story,
-              let chapter else {
-            log.error("generateContent: no story or chapter at index \(self.chapterIndex)")
+              let state = coordinator.story?.narrativeState,
+              let challenge = state.pendingChallenge else {
+            log.error("generateContent: no story, state, or challenge at beat \(self.chapterIndex)")
             return
         }
 
-        // Use the drawing prompt directly -- pipelineContext contains words like
-        // "child" and "hero" that get mangled by depersonalization into "rabbit"
-        // and "brave lion", misleading Image Playground.
-        chapter.imageGenerationPrompt = chapter.drawingPrompt
-
+        let imagePrompt = challenge.imageGenPrompt
         log.info("""
-            generateContent: chapter \(self.chapterIndex)
-              beat=\(chapter.beat.rawValue, privacy: .public), subject=\(chapter.drawingSubject.displayName, privacy: .public)
-              drawingPrompt=\(chapter.drawingPrompt, privacy: .public)
-              imagePrompt=\(chapter.imageGenerationPrompt, privacy: .public)
-              strokes=\(chapter.drawing.strokes.count)
+            generateContent: beat \(self.chapterIndex)
+              subject=\(challenge.subject, privacy: .public)
+              imagePrompt=\(imagePrompt, privacy: .public)
+              strokes=\(self.drawing.strokes.count)
             """)
 
-        // Run image generation and narration in parallel
+        // Step 1: Image generation + caption generation in parallel
         generationStatus = "Bringing your drawing to life..."
-        async let imageWork = generateImage(for: chapter)
-        async let narrationWork = bufferNarration(for: chapter, in: story)
+        async let imageWork = generateImage(prompt: imagePrompt)
+        async let captionWork = bufferCaption(
+            subject: challenge.subject,
+            role: challenge.role,
+            state: state,
+            storyType: story.storyType
+        )
         _ = await imageWork
-        _ = await narrationWork
+        let caption = await captionWork
 
-        // Reveal narration with word-by-word animation
-        await revealBufferedNarration()
+        // Step 2: Show caption
+        phase = .showingCaption
+        await revealText(caption) { text in captionText = text }
+        state.imageCaptions[chapterIndex] = caption
 
-        // Generate the NEXT chapter's drawing prompt (now that this chapter's narration exists)
-        let nextIndex = chapterIndex + 1
-        if nextIndex < Story.chapterCount {
-            let nextChapter = story.chapters[nextIndex]
-            await generateNextDrawingPrompt(for: nextChapter, in: story)
+        // Step 3: Narrative bridge
+        phase = .showingBridge
+        let beatPlan = state.beatPlan[chapterIndex]
+        let isFinalBeat = beatPlan.role == .resolve || beatPlan.role == .epilogue
+        let bridge = await generateBridge(
+            subject: challenge.subject,
+            role: challenge.role,
+            state: state,
+            storyType: story.storyType,
+            beatPlan: beatPlan
+        )
+        await revealText(bridge) { text in bridgeText = text }
+
+        // Step 4: Record completed beat
+        let completedBeat = StoryBeat(
+            beatIndex: chapterIndex,
+            drawingSubject: challenge.subject,
+            imageCaption: caption,
+            narrativeBridge: bridge
+        )
+        state.storyBeats.append(completedBeat)
+
+        // Step 5: Generate next challenge if not final
+        if !isFinalBeat && chapterIndex + 1 < state.beatPlan.count {
+            await generateNextChallenge(state: state, storyType: story.storyType)
         }
 
+        phase = .complete
         withAnimation(.easeOut(duration: 0.5)) {
             isReady = true
         }
     }
 
-    private func generateImage(for chapter: Chapter) async {
+    private func generateImage(prompt: String) async {
         do {
+            let currentDrawing = drawing
             let image = try await coordinator.imageService.generateImage(
-                from: chapter.drawing,
-                prompt: chapter.imageGenerationPrompt
+                from: currentDrawing,
+                prompt: prompt
             )
-            chapter.generatedImage = image
+            state?.generatedImages[chapterIndex] = image
             generatedImage = image
 
             if image != nil {
@@ -253,62 +317,91 @@ struct ImageRevealView: View {
         isGeneratingImage = false
     }
 
-    private func bufferNarration(for chapter: Chapter, in story: Story) async {
+    private func bufferCaption(
+        subject: String,
+        role: String,
+        state: NarrativeState,
+        storyType: StoryType
+    ) async -> String {
         do {
-            let previousChapters = Array(story.chapters.prefix(chapterIndex))
-            var narration = ""
-            for try await token in coordinator.storyEngine.generateNarration(
-                for: chapter,
-                storyType: story.storyType,
-                previousChapters: previousChapters,
-                introText: story.introText
+            var raw = ""
+            for try await token in coordinator.storyEngine.generateImageCaption(
+                subject: subject,
+                role: role,
+                state: state,
+                storyType: storyType
             ) {
-                narration += token
+                raw += token
             }
-            log.info("bufferNarration: raw = \"\(narration, privacy: .public)\"")
-            let cleaned = StoryEngine.cleanNarration(
-                narration,
-                drawingPrompt: chapter.drawingPrompt
-            )
-            log.info("bufferNarration: cleaned = \"\(cleaned, privacy: .public)\"")
-            bufferedNarration = cleaned
-            chapter.narration = cleaned
+            log.info("bufferCaption: raw = \"\(raw, privacy: .public)\"")
+            return StoryEngine.cleanCaption(raw)
         } catch {
-            log.error("bufferNarration: failed — \(error, privacy: .public)")
+            log.error("bufferCaption: failed — \(error, privacy: .public)")
+            return ""
         }
     }
 
-    private func generateNextDrawingPrompt(for nextChapter: Chapter, in story: Story) async {
+    private func generateBridge(
+        subject: String,
+        role: String,
+        state: NarrativeState,
+        storyType: StoryType,
+        beatPlan: BeatPlan
+    ) async -> String {
+        let isFinalBeat = beatPlan.role == .resolve || beatPlan.role == .epilogue
         do {
-            let previousChapters = Array(story.chapters.prefix(nextChapter.index))
-            var drawPrompt = ""
-            for try await token in coordinator.storyEngine.generateDrawingPrompt(
-                for: nextChapter,
-                storyType: story.storyType,
-                previousChapters: previousChapters,
-                introText: story.introText
+            var raw = ""
+            for try await token in coordinator.storyEngine.generateNarrativeBridge(
+                subject: subject,
+                role: role,
+                state: state,
+                storyType: storyType,
+                beatPlan: beatPlan
             ) {
-                drawPrompt += token
+                raw += token
             }
-            nextChapter.drawingPrompt = StoryEngine.cleanDrawingPrompt(drawPrompt)
-            log.info("generateNextDrawingPrompt: ch\(nextChapter.index) prompt = \"\(nextChapter.drawingPrompt, privacy: .public)\"")
+            log.info("generateBridge: raw = \"\(raw, privacy: .public)\"")
+            let result = StoryEngine.parseBridgeResult(raw, isFinalBeat: isFinalBeat)
+            if !result.newGap.isEmpty {
+                state.currentGap = result.newGap
+            }
+            return result.narrativeBridge
         } catch {
-            log.error("generateNextDrawingPrompt: failed — \(error, privacy: .public)")
+            log.error("generateBridge: failed — \(error, privacy: .public)")
+            return ""
         }
     }
 
-    private func revealBufferedNarration() async {
-        let words = bufferedNarration.split(
-            separator: " ",
-            omittingEmptySubsequences: false
-        )
+    private func generateNextChallenge(state: NarrativeState, storyType: StoryType) async {
+        do {
+            var raw = ""
+            for try await token in coordinator.storyEngine.generateDrawingChallenge(
+                gap: state.currentGap,
+                state: state,
+                storyType: storyType
+            ) {
+                raw += token
+            }
+            let nextRole = state.currentBeatRole ?? .complicate
+            let challenge = StoryEngine.parseDrawingChallenge(raw, fallbackRole: nextRole)
+            state.pendingChallenge = challenge
+            log.info("generateNextChallenge: subject=\"\(challenge.subject, privacy: .public)\"")
+        } catch {
+            log.error("generateNextChallenge: failed — \(error, privacy: .public)")
+            let nextRole = state.currentBeatRole ?? .complicate
+            state.pendingChallenge = DrawingChallenge.fallbacks[nextRole]
+        }
+    }
+
+    private func revealText(_ text: String, update: @escaping (String) -> Void) async {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
         guard !words.isEmpty else { return }
 
         var revealed = ""
         for (index, word) in words.enumerated() {
             if index > 0 { revealed += " " }
             revealed += word
-            narrationText = revealed
+            update(revealed)
             try? await Task.sleep(for: .milliseconds(30))
         }
     }
@@ -317,7 +410,7 @@ struct ImageRevealView: View {
 // MARK: - Transforming placeholder (drawing → generated image)
 
 private struct TransformingDrawingPlaceholder: View {
-    let chapter: Chapter
+    let drawing: PKDrawing
     let storyType: StoryType
 
     @State private var snapshotImage: UIImage?
@@ -331,7 +424,7 @@ private struct TransformingDrawingPlaceholder: View {
     }
 
     var body: some View {
-        let image = snapshotImage ?? chapter.drawing.renderedImage(scale: UIScreen.main.scale)
+        let image = snapshotImage ?? drawing.renderedImage(scale: UIScreen.main.scale)
 
         VStack(spacing: 16) {
             TimelineView(.animation(minimumInterval: 1 / 60)) { timeline in
@@ -398,7 +491,7 @@ private struct TransformingDrawingPlaceholder: View {
         }
         .onAppear {
             if snapshotImage == nil {
-                snapshotImage = chapter.drawing.renderedImage(scale: UIScreen.main.scale)
+                snapshotImage = drawing.renderedImage(scale: UIScreen.main.scale)
             }
         }
     }
