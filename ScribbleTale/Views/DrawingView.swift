@@ -41,8 +41,7 @@ struct DrawingView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Beat \(chapterIndex + 1) of \(coordinator.story?.chapterCount ?? 5)")
-                    .font(.system(.headline, design: .rounded))
+                EmptyView()
             }
         }
     }

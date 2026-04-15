@@ -59,6 +59,7 @@ final class StorySession: @unchecked Sendable {
     var status: SessionStatus = .inProgress
 
     // Runtime-only state (not persisted)
+    var parsedStory: ParsedStory?
     var pendingChallenge: DrawingChallenge?
     var drawings: [Int: PKDrawing] = [:]
     var generatedImages: [Int: CGImage] = [:]

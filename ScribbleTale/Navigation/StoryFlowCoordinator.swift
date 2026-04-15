@@ -9,7 +9,7 @@ final class StoryFlowCoordinator {
     var path = NavigationPath()
     var story: Story?
 
-    private(set) var storyEngine: StoryEngine
+    private(set) var storyEngine: SingleCallStoryEngine
     private(set) var imageService: ImageGenerationService
     let config = ProviderConfig.shared
     let persistence = StoryPersistence.shared
@@ -38,7 +38,7 @@ final class StoryFlowCoordinator {
         self.playgroundProvider = playground
         self.openAIImageProvider = openAIImage
 
-        self.storyEngine = StoryEngine(textProvider: mlx)
+        self.storyEngine = SingleCallStoryEngine(textProvider: mlx)
         self.imageService = ImageGenerationService(
             imageProvider: playground,
             needsDepersonalization: true
@@ -48,10 +48,10 @@ final class StoryFlowCoordinator {
     func selectTextModel(_ model: StoryModel) {
         log.info("selectTextModel: \(model.displayName, privacy: .public) isLocal=\(model.isLocal)")
         if model.isLocal {
-            storyEngine = StoryEngine(textProvider: mlxProvider)
+            storyEngine = SingleCallStoryEngine(textProvider: mlxProvider)
         } else {
             openAITextProvider.updateAPIKey(config.openAIKey)
-            storyEngine = StoryEngine(textProvider: openAITextProvider)
+            storyEngine = SingleCallStoryEngine(textProvider: openAITextProvider)
         }
     }
 
